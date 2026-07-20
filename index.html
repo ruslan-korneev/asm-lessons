@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="ru" data-lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FFmpeg Assembly — интерактивные визуализации</title>
+<style>
+  :root {
+    --bg: #0e1116;
+    --panel: #151b23;
+    --panel-edge: #232b36;
+    --text: #d9dee6;
+    --muted: #8a93a0;
+    --gpr: #e8a33d;
+    --vec: #4fc3e8;
+    --ok:  #6bcb77;
+    --tgt: #b18cf0;
+    --cell-bg: #1b232e;
+    --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f3f4f2; --panel: #ffffff; --panel-edge: #d8dcd6;
+      --text: #22272e; --muted: #6b7280;
+      --gpr: #b06f10; --vec: #0d7fa8; --ok: #2e8b46; --tgt: #7a4fd0;
+      --cell-bg: #eef0ed;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 15px/1.55 -apple-system, "Segoe UI", Roboto, sans-serif;
+    margin: 0; padding: 40px 16px 64px;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+
+  header { display: flex; align-items: flex-start; gap: 16px; }
+  h1 { font-size: 24px; margin: 0; font-weight: 650; text-wrap: balance; }
+  h1 code { font-family: var(--mono); color: var(--vec); font-size: 22px; }
+  .sub { color: var(--muted); margin: 6px 0 0; font-size: 14.5px; max-width: 52ch; }
+  .sub a { color: var(--vec); text-decoration: none; }
+  .sub a:hover { text-decoration: underline; }
+
+  .langsw { margin-left: auto; display: flex; gap: 4px; flex-shrink: 0; }
+  .langsw button {
+    font: 600 13px/1 -apple-system, "Segoe UI", sans-serif;
+    padding: 8px 14px; border-radius: 7px; cursor: pointer;
+    border: 1px solid var(--panel-edge); background: var(--panel); color: var(--muted);
+  }
+  .langsw button.on { background: var(--gpr); border-color: var(--gpr); color: #14100a; }
+  .langsw button:focus-visible { outline: 2px solid var(--vec); outline-offset: 2px; }
+
+  .card {
+    background: var(--panel); border: 1px solid var(--panel-edge);
+    border-radius: 12px; padding: 18px 20px;
+    display: flex; align-items: center; gap: 18px;
+  }
+  @media (max-width: 560px) { .card { flex-wrap: wrap; } }
+  .lessonno {
+    font-family: var(--mono); font-size: 13px; font-weight: 700;
+    color: var(--muted); letter-spacing: .08em; text-transform: uppercase;
+    writing-mode: initial; flex-shrink: 0; width: 74px;
+  }
+  .card.available .lessonno { color: var(--gpr); }
+  .cardbody { min-width: 0; flex: 1; }
+  .cardtitle { font-weight: 650; font-size: 16.5px; }
+  .cardtitle code { font-family: var(--mono); font-size: 15px; color: var(--vec); }
+  .carddesc { color: var(--muted); font-size: 13.5px; margin-top: 3px; }
+  .cardlinks { display: flex; gap: 8px; flex-shrink: 0; }
+  .cardlinks a {
+    font: 600 14px/1 -apple-system, "Segoe UI", sans-serif;
+    padding: 10px 18px; border-radius: 7px; text-decoration: none;
+    border: 1px solid var(--panel-edge); background: var(--cell-bg); color: var(--text);
+  }
+  .card.available .cardlinks a { border-color: var(--gpr); color: var(--gpr); }
+  .cardlinks a:hover { background: var(--gpr); color: #14100a; }
+  .card.soon { opacity: .55; }
+  .card.soon .cardlinks span {
+    font-size: 13px; color: var(--muted); padding: 10px 4px; font-style: italic;
+  }
+  .textlink { font-size: 12.5px; margin-top: 6px; }
+  .textlink a { color: var(--muted); text-decoration: none; border-bottom: 1px dotted var(--muted); }
+  .textlink a:hover { color: var(--text); }
+
+  footer { color: var(--muted); font-size: 12.5px; text-align: center; margin-top: 12px; }
+  footer a { color: var(--muted); }
+
+  /* language switching */
+  [data-lang="ru"] .en { display: none; }
+  [data-lang="en"] .ru { display: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>FFmpeg Assembly<br>
+        <span class="ru">интерактивные визуализации</span><span class="en">interactive visualizations</span>
+      </h1>
+      <p class="sub ru">Пошаговые визуализации к <a href="https://github.com/FFmpeg/asm-lessons">урокам ассемблера FFmpeg</a>: память, регистры и код в движении. Жми «Шаг» и смотри, что куда течёт.</p>
+      <p class="sub en">Step-by-step visualizations for the <a href="https://github.com/FFmpeg/asm-lessons">FFmpeg assembly lessons</a>: memory, registers and code in motion. Hit "Step" and watch what flows where.</p>
+    </div>
+    <div class="langsw" role="group" aria-label="Language">
+      <button id="swRu" class="on" onclick="setLang('ru')">RU</button>
+      <button id="swEn" onclick="setLang('en')">EN</button>
+    </div>
+  </header>
+
+  <div class="card available">
+    <span class="lessonno"><span class="ru">Урок 1</span><span class="en">Lesson 1</span></span>
+    <div class="cardbody">
+      <div class="cardtitle"><span class="ru">Регистры в деле: цикл</span><span class="en">Registers in action: the</span> <code>brighten</code> <span class="en">loop</span></div>
+      <div class="carddesc ru">GPR против векторных регистров · скалярный степпер · разбор add_values по строкам</div>
+      <div class="carddesc en">GPRs vs vector registers · scalar stepper · add_values line-by-line walkthrough</div>
+      <div class="textlink">
+        <span class="ru"><a href="https://github.com/ruslan-korneev/asm-lessons/blob/main/lesson_01/index.ru.md">текст урока →</a></span>
+        <span class="en"><a href="https://github.com/ruslan-korneev/asm-lessons/blob/main/lesson_01/index.md">lesson text →</a></span>
+      </div>
+    </div>
+    <div class="cardlinks">
+      <a class="ru" href="lesson_01/viz.ru.html">Открыть</a>
+      <a class="en" href="lesson_01/viz.en.html">Open</a>
+    </div>
+  </div>
+
+  <div class="card available">
+    <span class="lessonno"><span class="ru">Урок 2</span><span class="en">Lesson 2</span></span>
+    <div class="cardbody">
+      <div class="cardtitle"><span class="ru">Адресация:</span><span class="en">Addressing:</span> <code>[base + scale·index + disp]</code></div>
+      <div class="carddesc ru">формула адреса · калькулятор смещений · окна чтения m0 и m1 на ленте памяти</div>
+      <div class="carddesc en">the address formula · an offset calculator · m0 and m1 read windows on the memory tape</div>
+      <div class="textlink">
+        <span class="ru"><a href="https://github.com/ruslan-korneev/asm-lessons/blob/main/lesson_02/index.ru.md">текст урока →</a></span>
+        <span class="en"><a href="https://github.com/ruslan-korneev/asm-lessons/blob/main/lesson_02/index.md">lesson text →</a></span>
+      </div>
+    </div>
+    <div class="cardlinks">
+      <a class="ru" href="lesson_02/viz.ru.html">Открыть</a>
+      <a class="en" href="lesson_02/viz.en.html">Open</a>
+    </div>
+  </div>
+
+  <div class="card soon">
+    <span class="lessonno"><span class="ru">Урок 3</span><span class="en">Lesson 3</span></span>
+    <div class="cardbody">
+      <div class="cardtitle"><span class="ru">Секции данных и ветвление</span><span class="en">Data sections and branching</span></div>
+      <div class="carddesc ru">визуализация в работе</div>
+      <div class="carddesc en">visualization in progress</div>
+    </div>
+    <div class="cardlinks"><span class="ru">скоро</span><span class="en">soon</span></div>
+  </div>
+
+  <footer>
+    <span class="ru">Форк <a href="https://github.com/FFmpeg/asm-lessons">FFmpeg/asm-lessons</a> с русским переводом и визуализациями · <a href="https://github.com/ruslan-korneev/asm-lessons">исходники</a></span>
+    <span class="en">A fork of <a href="https://github.com/FFmpeg/asm-lessons">FFmpeg/asm-lessons</a> with a Russian translation and visualizations · <a href="https://github.com/ruslan-korneev/asm-lessons">source</a></span>
+  </footer>
+</div>
+
+<script>
+  function setLang(l) {
+    document.documentElement.dataset.lang = l;
+    document.documentElement.lang = l;
+    document.getElementById('swRu').classList.toggle('on', l === 'ru');
+    document.getElementById('swEn').classList.toggle('on', l === 'en');
+    try { localStorage.setItem('vizlang', l); } catch (e) {}
+  }
+  (function () {
+    var saved = null;
+    try { saved = localStorage.getItem('vizlang'); } catch (e) {}
+    if (!saved) saved = /^ru/i.test(navigator.language || '') ? 'ru' : 'en';
+    setLang(saved);
+  })();
+</script>
+</body>
+</html>

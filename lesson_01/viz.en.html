@@ -1,8 +1,8 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Регистры в деле: цикл brighten</title>
+<title>Registers in action: the brighten loop</title>
 <style>
   :root {
     --bg: #0e1116;
@@ -10,9 +10,9 @@
     --panel-edge: #232b36;
     --text: #d9dee6;
     --muted: #8a93a0;
-    --gpr: #e8a33d;       /* янтарный — указатели/счётчики */
-    --vec: #4fc3e8;       /* циан — векторные данные */
-    --ok:  #6bcb77;       /* зелёный — записано в память */
+    --gpr: #e8a33d;       /* amber — pointers/counters */
+    --vec: #4fc3e8;       /* cyan — vector data */
+    --ok:  #6bcb77;       /* green — written to memory */
     --cell-bg: #1b232e;
     --code-hl: #24303f;
     --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
@@ -66,7 +66,7 @@
   }
   .label b { color: var(--text); font-weight: 600; }
 
-  /* ── память ── */
+  /* ── memory ── */
   .memscroll { overflow-x: auto; padding-bottom: 4px; }
   .memrow { display: grid; grid-template-columns: 64px repeat(16, minmax(30px, 1fr)); gap: 4px; margin-bottom: 4px; min-width: 620px; }
   .addr { font-family: var(--mono); font-size: 11px; color: var(--muted); align-self: center; text-align: right; padding-right: 6px; }
@@ -110,7 +110,7 @@
   .vreg.active .vcell { border-color: var(--vec); color: var(--vec); }
   .vreg.result .vcell { border-color: var(--ok); color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, var(--cell-bg)); }
 
-  /* ── код ── */
+  /* ── code ── */
   .codegrid { display: grid; grid-template-columns: 1fr; gap: 14px; }
   pre.code {
     font-family: var(--mono); font-size: 13.5px; line-height: 1.7;
@@ -140,7 +140,7 @@
   .legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); }
   .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; }
 
-  /* ── часть 2: скалярный степпер ── */
+  /* ── part 2: scalar stepper ── */
   .parthead { font-size: 17px; font-weight: 650; margin: 18px 0 0; }
   .parthead small { display: block; font-weight: 400; font-size: 13.5px; color: var(--muted); margin-top: 2px; }
   .scalar { display: grid; grid-template-columns: 200px 1fr; gap: 20px; align-items: start; }
@@ -158,7 +158,7 @@
   }
   .hint code { font-family: var(--mono); color: var(--vec); }
 
-  /* ── часть 3: разбор add_values ── */
+  /* ── part 3: add_values walkthrough ── */
   pre.code .ln.clickable { cursor: pointer; }
   pre.code .ln.clickable:hover { background: var(--code-hl); }
   pre.code .ln.sel { background: var(--code-hl); outline: 1px solid var(--gpr); }
@@ -175,16 +175,16 @@
 
 <div class="wrap">
   <nav class="topnav">
-    <a href="../">← Все уроки</a>
-    <span class="lang"><b>RU</b> · <a href="viz.en.html">EN</a></span>
+    <a href="../">← All lessons</a>
+    <span class="lang"><a href="viz.ru.html">RU</a> · <b>EN</b></span>
   </nav>
   <div>
-    <h1>Регистры в деле: <code>brighten</code> — каждому пикселю +10</h1>
-    <p class="sub">32 пикселя в памяти · GPR ведут навигацию · векторные регистры молотят данные по 16 штук. Жми «Шаг» и смотри, что куда течёт.</p>
+    <h1>Registers in action: <code>brighten</code> — +10 to every pixel</h1>
+    <p class="sub">32 pixels in memory · GPRs handle navigation · vector registers crunch data 16 at a time. Hit "Step" and watch what flows where.</p>
   </div>
 
   <div class="panel">
-    <div class="label">Память (RAM) — <b>значения яркости пикселей</b>, адреса 1000–1031</div>
+    <div class="label">Memory (RAM) — <b>pixel brightness values</b>, addresses 1000–1031</div>
     <div class="memscroll">
       <div class="memrow" id="mem0"></div>
       <div class="ptrrow" id="ptr0"></div>
@@ -194,15 +194,15 @@
   </div>
 
   <div class="panel">
-    <div class="label">CPU — регистры</div>
+    <div class="label">CPU — registers</div>
     <div class="cpu">
       <div class="gpr-box">
-        <div class="gpr" id="r0"><span><span class="rname">r0q</span><br><span class="rrole">указатель «где»</span></span><span class="rval" id="r0v">1000</span></div>
-        <div class="gpr" id="r1"><span><span class="rname">r1q</span><br><span class="rrole">счётчик «сколько»</span></span><span class="rval" id="r1v">32</span></div>
+        <div class="gpr" id="r0"><span><span class="rname">r0q</span><br><span class="rrole">pointer — "where"</span></span><span class="rval" id="r0v">1000</span></div>
+        <div class="gpr" id="r1"><span><span class="rname">r1q</span><br><span class="rrole">counter — "how many"</span></span><span class="rval" id="r1v">32</span></div>
       </div>
       <div class="vecs">
-        <div class="vreg" id="m0"><div class="vname">m0 <span>— рабочие данные (16 байт)</span></div><div class="vcells-scroll"><div class="vcells" id="m0c"></div></div></div>
-        <div class="vreg" id="m1"><div class="vname">m1 <span>— константа, загружена один раз</span></div><div class="vcells-scroll"><div class="vcells" id="m1c"></div></div></div>
+        <div class="vreg" id="m0"><div class="vname">m0 <span>— working data (16 bytes)</span></div><div class="vcells-scroll"><div class="vcells" id="m0c"></div></div></div>
+        <div class="vreg" id="m1"><div class="vname">m1 <span>— constant, loaded once</span></div><div class="vcells-scroll"><div class="vcells" id="m1c"></div></div></div>
       </div>
     </div>
   </div>
@@ -211,20 +211,20 @@
     <pre class="code" id="code"></pre>
     <div class="narr" id="narr"></div>
     <div class="controls">
-      <button class="primary" id="btnStep">Шаг →</button>
-      <button id="btnBack">← Назад</button>
-      <button id="btnReset">Сброс</button>
+      <button class="primary" id="btnStep">Step →</button>
+      <button id="btnBack">← Back</button>
+      <button id="btnReset">Reset</button>
       <span class="stepno" id="stepno"></span>
     </div>
     <div class="legend">
-      <span><i style="background:var(--gpr)"></i>GPR: адрес / счётчик</span>
-      <span><i style="background:var(--vec)"></i>данные читаются / в векторном регистре</span>
-      <span><i style="background:var(--ok)"></i>результат записан в память</span>
+      <span><i style="background:var(--gpr)"></i>GPR: address / counter</span>
+      <span><i style="background:var(--vec)"></i>data being read / in vector register</span>
+      <span><i style="background:var(--ok)"></i>result written to memory</span>
     </div>
   </div>
 
-  <h2 class="parthead">Часть 2 — скалярный asm: одна инструкция, одно значение
-    <small>Тот самый «искусственный» фрагмент из урока. Один GPR, никаких векторов. Смотри, как значение меняется.</small>
+  <h2 class="parthead">Part 2 — scalar asm: one instruction, one value
+    <small>That "artificial" snippet from the lesson. One GPR, no vectors. Watch the value change.</small>
   </h2>
 
   <div class="panel">
@@ -234,23 +234,23 @@
           <div class="rname">r0q</div>
           <div class="rval" id="s_rval">?</div>
         </div>
-        <div class="hint">Порядок Intel: <code>mov r0q, 3</code> читай как «r0q = 3».<br>Приёмник слева ← источник справа, как memcpy(dst, src).</div>
+        <div class="hint">Intel order: read <code>mov r0q, 3</code> as "r0q = 3".<br>Destination on the left ← source on the right, like memcpy(dst, src).</div>
       </div>
       <div>
         <pre class="code" id="s_code"></pre>
         <div class="narr" id="s_narr" style="margin-top:12px"></div>
         <div class="controls" style="margin-top:12px">
-          <button class="primary" id="s_step">Шаг →</button>
-          <button id="s_back">← Назад</button>
-          <button id="s_reset">Сброс</button>
+          <button class="primary" id="s_step">Step →</button>
+          <button id="s_back">← Back</button>
+          <button id="s_reset">Reset</button>
           <span class="stepno" id="s_stepno"></span>
         </div>
       </div>
     </div>
   </div>
 
-  <h2 class="parthead">Часть 3 — <span style="font-family:var(--mono)">add_values</span> построчно
-    <small>Первая настоящая SIMD-функция из урока. Кликай по строкам кода — каждая объясняется. Строка cglobal разобрана по токенам.</small>
+  <h2 class="parthead">Part 3 — <span style="font-family:var(--mono)">add_values</span> line by line
+    <small>The first real SIMD function of the lesson. Click code lines — each one is explained. The cglobal line is broken down token by token.</small>
   </h2>
 
   <div class="panel">
@@ -268,19 +268,19 @@
   var TENS = []; for (var i = 0; i < 16; i++) TENS.push(10);
 
   var CODE = [
-    { t: ";; до цикла — один раз", cm: true },
+    { t: ";; before the loop — once", cm: true },
     { t: "  mova  m1, [tens]      ; m1 = [10 ×16]" },
     { t: ".loop:" },
-    { t: "  movu  m0, [r0q]       ; LOAD: 16 байт из памяти" },
-    { t: "  paddb m0, m1          ; m0 += m1, все 16 разом" },
-    { t: "  movu  [r0q], m0       ; STORE: обратно в память" },
-    { t: "  add   r0q, 16         ; указатель → след. пачка" },
-    { t: "  sub   r1q, 16         ; счётчик −16" },
-    { t: "  jg    .loop           ; осталось >0 → повтор" },
+    { t: "  movu  m0, [r0q]       ; LOAD: 16 bytes from memory" },
+    { t: "  paddb m0, m1          ; m0 += m1, all 16 at once" },
+    { t: "  movu  [r0q], m0       ; STORE: back to memory" },
+    { t: "  add   r0q, 16         ; pointer → next batch" },
+    { t: "  sub   r1q, 16         ; counter −16" },
+    { t: "  jg    .loop           ; still >0 → repeat" },
     { t: "  RET" }
   ];
 
-  // ── симуляция: массив снимков состояния ──
+  // ── simulation: array of state snapshots ──
   var steps = [];
   function snap(o) {
     steps.push({
@@ -297,11 +297,11 @@
   var writtenSoFar = [];
 
   snap({ line: -1, mem: mem, r0: r0, r1: r1, m0: m0, m1: m1,
-         desc: "<b>Старт.</b> В памяти 32 пикселя. r0q = 1000 — адрес первого. r1q = 32 — сколько обработать. Векторные регистры пусты." });
+         desc: "<b>Start.</b> 32 pixels in memory. r0q = 1000 — address of the first one. r1q = 32 — how many to process. Vector registers are empty." });
 
   m1 = TENS.slice();
   snap({ line: 1, mem: mem, r0: r0, r1: r1, m0: m0, m1: m1, m1on: true, written: writtenSoFar,
-         desc: "<b>Один раз до цикла:</b> константа [10, 10, … ×16] загружена в m1. Дальше она живёт в регистре — ноль обращений к памяти." });
+         desc: "<b>Once, before the loop:</b> the constant [10, 10, … ×16] is loaded into m1. From here on it lives in the register — zero memory accesses." });
 
   while (r1 > 0) {
     var lo = r0 - BASE, idx = [];
@@ -309,34 +309,34 @@
 
     m0 = mem.slice(lo, lo + 16);
     snap({ line: 3, mem: mem, r0: r0, r1: r1, m0: m0, m1: m1, reading: idx, m0state: "active", r0on: true, written: writtenSoFar,
-           desc: "<b>LOAD.</b> [r0q] = «сходи по адресу " + r0 + "» → 16 байт из памяти скопированы в m0. GPR дал адрес, данные легли в векторный регистр." });
+           desc: "<b>LOAD.</b> [r0q] = \"go to address " + r0 + "\" → 16 bytes copied from memory into m0. The GPR supplied the address, the data landed in the vector register." });
 
     for (var j = 0; j < 16; j++) m0[j] = (m0[j] + m1[j]) & 255;
     snap({ line: 4, mem: mem, r0: r0, r1: r1, m0: m0, m1: m1, m0state: "result", m1on: true, written: writtenSoFar,
-           desc: "<b>paddb.</b> Каждый байт m0 + соответствующий байт m1 — <b>одной инструкцией</b>. В C это 16 итераций цикла." });
+           desc: "<b>paddb.</b> Every byte of m0 + the matching byte of m1 — <b>in a single instruction</b>. In C this is 16 loop iterations." });
 
     for (var w = 0; w < 16; w++) mem[lo + w] = m0[w];
     writtenSoFar = writtenSoFar.concat(idx);
     snap({ line: 5, mem: mem, r0: r0, r1: r1, m0: m0, m1: m1, m0state: "result", r0on: true, written: writtenSoFar,
-           desc: "<b>STORE.</b> 16 байт из m0 записаны обратно по адресу " + r0 + ". Зелёное в памяти = обработано. Пиксели стали ярче." });
+           desc: "<b>STORE.</b> 16 bytes from m0 written back to address " + r0 + ". Green in memory = processed. The pixels got brighter." });
 
     r0 += 16;
     snap({ line: 6, mem: mem, r0: r0, r1: r1, m0: m0, m1: m1, r0on: true, written: writtenSoFar,
-           desc: "<b>Навигация.</b> r0q = " + r0 + " — указатель сдвинулся на следующую пачку. Сами данные не трогали, только адрес." });
+           desc: "<b>Navigation.</b> r0q = " + r0 + " — the pointer moved to the next batch. We didn't touch the data, only the address." });
 
     r1 -= 16;
     snap({ line: 7, mem: mem, r0: r0, r1: r1, m0: m0, m1: m1, r1on: true, written: writtenSoFar,
-           desc: "<b>Учёт.</b> r1q = " + r1 + " — осталось " + r1 + " пикселей." });
+           desc: "<b>Bookkeeping.</b> r1q = " + r1 + " — " + r1 + " pixels left." });
 
     snap({ line: 8, mem: mem, r0: r0, r1: r1, m0: m0, m1: m1, r1on: true, written: writtenSoFar,
            desc: r1 > 0
-             ? "<b>jg</b> — r1q > 0 → прыжок в начало цикла. Вторая пачка."
-             : "<b>jg</b> — r1q = 0 → прыжка нет, выходим из цикла." });
+             ? "<b>jg</b> — r1q > 0 → jump back to the top of the loop. Second batch."
+             : "<b>jg</b> — r1q = 0 → no jump, we leave the loop." });
   }
   snap({ line: 9, mem: mem, r0: r0, r1: r1, m0: m0, m1: m1, written: writtenSoFar,
-         desc: "<b>Готово.</b> 32 пикселя обработаны за 2 итерации — вместо 32 итераций скалярного C-цикла. GPR отвечали «где» и «сколько», векторные регистры несли сами данные." });
+         desc: "<b>Done.</b> 32 pixels processed in 2 iterations — instead of 32 iterations of a scalar C loop. GPRs answered \"where\" and \"how many\", vector registers carried the data itself." });
 
-  // ── рендер ──
+  // ── render ──
   var cur = 0;
   var $ = function (id) { return document.getElementById(id); };
 
@@ -402,7 +402,7 @@
       ln.className = "ln" + (CODE[i].cm ? " cm" : "") + (st.line === i ? " hl" : "");
     }
     $("narr").innerHTML = st.desc;
-    $("stepno").textContent = "шаг " + cur + " / " + (steps.length - 1);
+    $("stepno").textContent = "step " + cur + " / " + (steps.length - 1);
     $("btnStep").disabled = cur === steps.length - 1;
     $("btnBack").disabled = cur === 0;
   }
@@ -418,16 +418,16 @@
   render();
 })();
 
-// ── часть 2: скалярный степпер ──
+// ── part 2: scalar stepper ──
 (function () {
   var $ = function (id) { return document.getElementById(id); };
   var LINES = ["mov  r0q, 3", "inc  r0q", "dec  r0q", "imul r0q, 5"];
   var STEPS = [
-    { line: -1, val: "?", desc: "<b>Старт.</b> В r0q — мусор (что осталось от прошлой работы). Регистр никогда не бывает «пустым», в нём всегда какие-то биты." },
-    { line: 0, val: "3", desc: "<b>mov.</b> Тройка — <b>immediate</b>-значение: зашита прямо в код инструкции, из памяти ничего не читали. r0q = 3. Суффикс «q» = работаем с регистром как с qword (64 бита)." },
-    { line: 1, val: "4", desc: "<b>inc</b> = increment: r0q += 1 → 4. Один операнд — он и источник, и приёмник." },
-    { line: 2, val: "3", desc: "<b>dec</b> = decrement: r0q −= 1 → обратно 3." },
-    { line: 3, val: "15", desc: "<b>imul</b> = integer multiply: r0q ×= 5 → <b>15</b>. Итог: четыре инструкции, все операции — внутри одного регистра, память не тронута ни разу. Это и есть скалярный код: одно значение за раз." }
+    { line: -1, val: "?", desc: "<b>Start.</b> r0q holds garbage (whatever was left from earlier work). A register is never \"empty\" — it always holds some bits." },
+    { line: 0, val: "3", desc: "<b>mov.</b> The 3 is an <b>immediate</b> value: baked right into the instruction encoding, nothing read from memory. r0q = 3. The \"q\" suffix = treat the register as a qword (64 bits)." },
+    { line: 1, val: "4", desc: "<b>inc</b> = increment: r0q += 1 → 4. A single operand — it's both source and destination." },
+    { line: 2, val: "3", desc: "<b>dec</b> = decrement: r0q −= 1 → back to 3." },
+    { line: 3, val: "15", desc: "<b>imul</b> = integer multiply: r0q ×= 5 → <b>15</b>. Bottom line: four instructions, every operation stayed inside one register, memory untouched. That's scalar code: one value at a time." }
   ];
   var code = $("s_code");
   LINES.forEach(function (t, i) {
@@ -445,7 +445,7 @@
     for (var i = 0; i < LINES.length; i++)
       $("s_ln" + i).className = "ln" + (st.line === i ? " hl" : "");
     $("s_narr").innerHTML = st.desc;
-    $("s_stepno").textContent = "шаг " + cur + " / " + (STEPS.length - 1);
+    $("s_stepno").textContent = "step " + cur + " / " + (STEPS.length - 1);
     $("s_step").disabled = cur === STEPS.length - 1;
     $("s_back").disabled = cur === 0;
   }
@@ -455,43 +455,43 @@
   render();
 })();
 
-// ── часть 3: разбор add_values ──
+// ── part 3: add_values walkthrough ──
 (function () {
   var $ = function (id) { return document.getElementById(id); };
   var LINES = [
     { t: '%include "x86inc.asm"',
-      e: "<b>Подключение x86inc.asm</b> — «заголовок» от сообществ x264 / FFmpeg / dav1d. Даёт всё, чем мы пользовались: имена r0/r1 вместо сырых имён регистров, m0/m1 вместо xmm0/xmm1, макросы cglobal и RET. Без него — голый nasm, где всё это пришлось бы делать руками." },
+      e: "<b>Including x86inc.asm</b> — the \"header\" from the x264 / FFmpeg / dav1d communities. It provides everything we've been using: r0/r1 names instead of raw register names, m0/m1 instead of xmm0/xmm1, the cglobal and RET macros. Without it you get bare nasm, where all of this is manual." },
     { t: "" },
     { t: "SECTION .text",
-      e: "<b>Секция кода.</b> Исполняемые инструкции живут в .text. Константы (как наша пачка десяток [10×16] из части 1) кладут в другую секцию — .data. Урок 3 покажет это на практике." },
+      e: "<b>Code section.</b> Executable instructions live in .text. Constants (like our batch of tens [10×16] from part 1) go into a different section — .data. Lesson 3 shows this in practice." },
     { t: "" },
     { t: ";static void add_values(uint8_t *src, const uint8_t *src2)",
-      e: "<b>Комментарий.</b> Точка с запятой «;» в asm = «//» в C. Здесь принято писать C-сигнатуру функции, чтобы читатель сразу видел: два указателя на байты, ничего не возвращает." },
+      e: "<b>Comment.</b> The semicolon \";\" in asm = \"//\" in C. The convention is to write the function's C signature here, so the reader immediately sees: two byte pointers, returns nothing." },
     { t: "INIT_XMM sse2",
-      e: "<b>Выбор ширины и набора инструкций.</b> «Эта функция работает с xmm-регистрами (128 бит = пачки по 16 байт), используя инструкции из набора sse2» — paddb как раз оттуда. Помнишь вопрос, почему берём по 16 байт? Вот где это решается: поменяй строку на INIT_YMM avx2 — и тот же самый код с m0 поедет окном 32 байта." },
+      e: "<b>Choosing width and instruction set.</b> \"This function works with xmm registers (128 bits = batches of 16 bytes), using instructions from the sse2 set\" — paddb comes from there. Remember asking why we grab 16 bytes at a time? This is where that's decided: change the line to INIT_YMM avx2 — and the very same m0 code rides a 32-byte window." },
     { t: "cglobal add_values, 2, 2, 2, src, src2",
-      e: "<b>Главная строка: объявление C-функции.</b> После неё из C можно вызвать add_values(src, src2) как обычную функцию. Числа и имена — кликай токены ниже, каждый объясняется.", chips: true },
+      e: "<b>The key line: declaring a C function.</b> After it, C code can call add_values(src, src2) like a normal function. The numbers and names — click the tokens below, each one is explained.", chips: true },
     { t: "    movu  m0, [srcq]",
-      e: "<b>LOAD — ты это уже видел в части 1.</b> Скобки = разыменование: «сходи по адресу в srcq, возьми 16 байт → в m0». Это *src из C. Регистр srcq появился из имени «src» в cglobal + суффикс «q»: сам указатель 64-битный, но грузим мы 128 бит данных." },
+      e: "<b>LOAD — you already saw this in part 1.</b> Brackets = dereference: \"go to the address in srcq, take 16 bytes → into m0\". This is *src from C. The srcq register comes from the name \"src\" in cglobal + the \"q\" suffix: the pointer itself is 64-bit, but we're loading 128 bits of data." },
     { t: "    movu  m1, [src2q]",
-      e: "<b>Второй LOAD.</b> 16 байт по адресу src2q → в m1. Теперь оба векторных регистра заряжены. movu = movdqu, «move double quad unaligned» — про «unaligned» (выравнивание) расскажет урок 2." },
+      e: "<b>Second LOAD.</b> 16 bytes at address src2q → into m1. Both vector registers are now loaded. movu = movdqu, \"move double quad unaligned\" — lesson 2 explains \"unaligned\" (alignment)." },
     { t: "" },
     { t: "    paddb m0, m1",
-      e: "<b>Сложение — сердце функции.</b> p-add-b: «p» = packed (векторная инструкция, не скалярная), «b» = bytes. 16 сложений одной инструкцией — в части 1 ты видел это в движении. m0 = m0 + m1 поэлементно." },
+      e: "<b>The addition — the heart of the function.</b> p-add-b: \"p\" = packed (a vector instruction, not scalar), \"b\" = bytes. 16 additions in one instruction — you saw it in motion in part 1. m0 = m0 + m1, elementwise." },
     { t: "" },
     { t: "    movu  [srcq], m0",
-      e: "<b>STORE.</b> Операнды поменялись местами: скобки теперь слева → пишем в память. 16 байт результата из m0 → по адресу srcq, прямо поверх исходных данных src." },
+      e: "<b>STORE.</b> The operands swapped places: brackets are now on the left → we write to memory. 16 result bytes from m0 → to address srcq, right over the original src data." },
     { t: "" },
     { t: "    RET",
-      e: "<b>Возврат.</b> Макрос из x86inc (не голая инструкция ret — макрос ещё и приберётся за собой, если надо). Заметь: функция ничего не возвращает. Результат уже лежит в памяти по указателю src — стиль почти всех asm-функций FFmpeg: меняем данные по адресу, а не возвращаем значение." }
+      e: "<b>Return.</b> A macro from x86inc (not the bare ret instruction — the macro also cleans up after itself when needed). Note: the function returns nothing. The result already sits in memory behind the src pointer — the style of almost every FFmpeg asm function: mutate data at an address instead of returning a value." }
   ];
   var CHIPS = [
-    { t: "cglobal", l: "макрос", e: "<b>cglobal</b> — макрос из x86inc: объявляет функцию, видимую из C-кода. Разруливает за тебя всю рутину вызова (где лежат аргументы на разных ОС — Linux, Windows, macOS передают их по-разному; тебя это больше не касается)." },
-    { t: "add_values", l: "имя", e: "<b>add_values</b> — имя функции. Из C вызывается как обычно: add_values(src, src2)." },
-    { t: "2", l: "аргументы", e: "<b>Первая двойка: аргументов = 2.</b> Столько параметров у функции (src и src2). x86inc сам достанет их — из регистров или со стека, смотря по ОС — и положит в r0, r1." },
-    { t: "2", l: "GPR", e: "<b>Вторая двойка: GPR = 2.</b> Сколько всего регистров общего назначения нужно функции, включая аргументы. Понадобился бы счётчик цикла, как r1q в части 1, — написал бы 3." },
-    { t: "2", l: "XMM", e: "<b>Третья двойка: XMM = 2.</b> Сколько векторных регистров используем — m0 и m1. x86inc должен знать заранее (на Windows часть xmm-регистров надо сохранять — он сделает это за тебя)." },
-    { t: "src, src2", l: "имена арг.", e: "<b>Имена аргументов.</b> Из них рождаются srcq и src2q, которые ты видишь ниже в коде. Читается в сто раз лучше безликих r0q/r1q. В старом коде FFmpeg имён нет — там обращаются напрямую r0, r1." }
+    { t: "cglobal", l: "macro", e: "<b>cglobal</b> — an x86inc macro: declares a function visible from C code. It handles all the calling-convention chores for you (where arguments live on each OS — Linux, Windows, macOS pass them differently; no longer your problem)." },
+    { t: "add_values", l: "name", e: "<b>add_values</b> — the function name. Called from C as usual: add_values(src, src2)." },
+    { t: "2", l: "arguments", e: "<b>First 2: arguments = 2.</b> How many parameters the function takes (src and src2). x86inc fetches them itself — from registers or the stack, depending on the OS — and puts them into r0, r1." },
+    { t: "2", l: "GPRs", e: "<b>Second 2: GPRs = 2.</b> How many general-purpose registers the function needs in total, arguments included. If you needed a loop counter like r1q in part 1, you'd write 3." },
+    { t: "2", l: "XMM", e: "<b>Third 2: XMM = 2.</b> How many vector registers we use — m0 and m1. x86inc needs to know up front (on Windows some xmm registers must be preserved — it does that for you)." },
+    { t: "src, src2", l: "arg names", e: "<b>Argument names.</b> They give birth to the srcq and src2q you see below in the code. Reads a hundred times better than faceless r0q/r1q. Older FFmpeg code has no names — it accesses r0, r1 directly." }
   ];
 
   var code = $("f_code");

@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Addressing: [base + scale·index + disp]</title>
+<style>
+  :root {
+    --bg: #0e1116;
+    --panel: #151b23;
+    --panel-edge: #232b36;
+    --text: #d9dee6;
+    --muted: #8a93a0;
+    --gpr: #e8a33d;       /* amber — pointers/counters (base) */
+    --vec: #4fc3e8;       /* cyan — index part and m0 data */
+    --ok:  #6bcb77;       /* green — constants (disp) */
+    --tgt: #b18cf0;       /* violet — computed address and m1 window */
+    --cell-bg: #1b232e;
+    --code-hl: #24303f;
+    --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f3f4f2; --panel: #ffffff; --panel-edge: #d8dcd6;
+      --text: #22272e; --muted: #6b7280;
+      --gpr: #b06f10; --vec: #0d7fa8; --ok: #2e8b46; --tgt: #7a4fd0;
+      --cell-bg: #eef0ed; --code-hl: #e4e9ef;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0e1116; --panel: #151b23; --panel-edge: #232b36;
+    --text: #d9dee6; --muted: #8a93a0;
+    --gpr: #e8a33d; --vec: #4fc3e8; --ok: #6bcb77; --tgt: #b18cf0;
+    --cell-bg: #1b232e; --code-hl: #24303f;
+  }
+  :root[data-theme="light"] {
+    --bg: #f3f4f2; --panel: #ffffff; --panel-edge: #d8dcd6;
+    --text: #22272e; --muted: #6b7280;
+    --gpr: #b06f10; --vec: #0d7fa8; --ok: #2e8b46; --tgt: #7a4fd0;
+    --cell-bg: #eef0ed; --code-hl: #e4e9ef;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 15px/1.55 -apple-system, "Segoe UI", Roboto, sans-serif;
+    margin: 0; padding: 24px 16px 64px;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+
+  .topnav { display: flex; gap: 14px; align-items: baseline; font-size: 13.5px; }
+  .topnav a { color: var(--muted); text-decoration: none; border-bottom: 1px dotted var(--muted); }
+  .topnav a:hover { color: var(--text); }
+  .topnav .lang { margin-left: auto; color: var(--muted); }
+  .topnav .lang b { color: var(--text); }
+
+  h1 { font-size: 20px; margin: 0; font-weight: 650; text-wrap: balance; }
+  h1 code { font-family: var(--mono); color: var(--tgt); font-size: 18px; }
+  .sub { color: var(--muted); margin: 2px 0 6px; font-size: 14px; }
+
+  .panel {
+    background: var(--panel); border: 1px solid var(--panel-edge);
+    border-radius: 10px; padding: 14px 16px;
+  }
+  .label {
+    font-size: 11px; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 10px; font-weight: 600;
+  }
+  .label b { color: var(--text); font-weight: 600; }
+
+  /* ── formula header ── */
+  .formula {
+    font-family: var(--mono); font-size: 18px; text-align: center;
+    display: flex; gap: 0.35em; justify-content: center; flex-wrap: wrap; align-items: baseline;
+  }
+  .formula .fb { color: var(--gpr); }
+  .formula .fi { color: var(--vec); }
+  .formula .fd { color: var(--ok); }
+  .fkey { display: flex; gap: 18px; justify-content: center; flex-wrap: wrap; margin-top: 8px; font-size: 12.5px; color: var(--muted); }
+  .fkey b { font-family: var(--mono); font-weight: 600; }
+  .fkey .fb { color: var(--gpr); } .fkey .fi { color: var(--vec); } .fkey .fd { color: var(--ok); }
+
+  /* ── code ── */
+  pre.code {
+    font-family: var(--mono); font-size: 13.5px; line-height: 1.7;
+    margin: 0; overflow-x: auto;
+  }
+  pre.code .ln { display: block; padding: 0 10px; border-radius: 5px; white-space: pre; }
+  pre.code .ln.hl { background: var(--code-hl); outline: 1px solid var(--panel-edge); }
+  pre.code .cm { color: var(--muted); }
+  pre.code .kw { color: var(--vec); }
+
+  .narr {
+    border-left: 3px solid var(--gpr); padding: 8px 12px; border-radius: 0 6px 6px 0;
+    background: var(--cell-bg); min-height: 3.6em; font-size: 14.5px;
+  }
+  .narr b { color: var(--gpr); }
+  .narr .t { color: var(--tgt); font-weight: 600; }
+  .narr .v { color: var(--vec); font-weight: 600; }
+  .narr .k { color: var(--ok); font-weight: 600; }
+  .narr code { font-family: var(--mono); font-size: 13px; }
+
+  .controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  button {
+    font: 600 14px/1 -apple-system, "Segoe UI", sans-serif;
+    padding: 10px 22px; border-radius: 7px; cursor: pointer;
+    border: 1px solid var(--panel-edge); background: var(--cell-bg); color: var(--text);
+  }
+  button.primary { background: var(--gpr); border-color: var(--gpr); color: #14100a; }
+  button:focus-visible { outline: 2px solid var(--vec); outline-offset: 2px; }
+  .stepno { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-left: auto; }
+
+  /* ── address calculator ── */
+  .calc { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-family: var(--mono); font-size: 15px; }
+  .calc .op { color: var(--muted); }
+  .cchip {
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    background: var(--cell-bg); border: 1px solid var(--panel-edge);
+    border-radius: 7px; padding: 7px 12px; min-width: 74px;
+    transition: border-color .25s, box-shadow .25s;
+  }
+  .cchip small {
+    font-family: -apple-system, "Segoe UI", sans-serif; font-size: 10px;
+    letter-spacing: .07em; text-transform: uppercase; color: var(--muted);
+  }
+  .cchip .cv { font-size: 17px; font-variant-numeric: tabular-nums; }
+  .cchip.cb { border-color: var(--gpr); } .cchip.cb .cv { color: var(--gpr); }
+  .cchip.ci { border-color: var(--vec); } .cchip.ci .cv { color: var(--vec); }
+  .cchip.cd { border-color: var(--ok); }  .cchip.cd .cv { color: var(--ok); }
+  .cchip.ct { border-color: var(--tgt); } .cchip.ct .cv { color: var(--tgt); font-weight: 700; }
+  .calc.live .cchip.ct { box-shadow: 0 0 0 3px color-mix(in srgb, var(--tgt) 30%, transparent); }
+  .calc.idle { opacity: .45; }
+  .calcnote { font-size: 12.5px; color: var(--muted); margin-top: 8px; }
+  .calcnote code { font-family: var(--mono); color: var(--ok); }
+
+  /* ── memory ── */
+  .memscroll { overflow-x: auto; padding-bottom: 4px; }
+  .memrow { display: grid; grid-template-columns: 64px repeat(16, minmax(30px, 1fr)); gap: 4px; margin-bottom: 4px; min-width: 620px; }
+  .addr { font-family: var(--mono); font-size: 11px; color: var(--muted); align-self: center; text-align: right; padding-right: 6px; }
+  .cell {
+    font-family: var(--mono); font-size: 12px; text-align: center;
+    background: var(--cell-bg); border: 1px solid var(--panel-edge);
+    border-radius: 5px; padding: 5px 0; color: var(--muted);
+    transition: background .25s, border-color .25s, color .25s, opacity .25s;
+  }
+  .cell.m0 { border-color: var(--vec); color: var(--vec); background: color-mix(in srgb, var(--vec) 12%, var(--cell-bg)); }
+  .cell.m1 { border-color: var(--tgt); color: var(--tgt); background: color-mix(in srgb, var(--tgt) 14%, var(--cell-bg)); }
+  .cell.m0.m1 { background: linear-gradient(135deg, color-mix(in srgb, var(--vec) 16%, var(--cell-bg)) 50%, color-mix(in srgb, var(--tgt) 18%, var(--cell-bg)) 50%); }
+  .cell.past { opacity: .38; }
+  .ptrrow { display: grid; grid-template-columns: 64px repeat(16, minmax(30px, 1fr)); gap: 4px; min-width: 620px; height: 20px; margin-bottom: 2px; }
+  .ptr { grid-row: 1; font-family: var(--mono); font-size: 11px; text-align: center; white-space: nowrap; }
+  .ptr.psrc { color: var(--gpr); font-weight: 700; }
+  .ptr.pm1 { color: var(--tgt); font-weight: 700; }
+
+  /* ── registers ── */
+  .cpu { display: grid; grid-template-columns: 240px 1fr; gap: 20px; }
+  @media (max-width: 680px) { .cpu { grid-template-columns: 1fr; } }
+  .gpr-box { display: flex; flex-direction: column; gap: 8px; }
+  .gpr {
+    display: flex; justify-content: space-between; align-items: center;
+    font-family: var(--mono); background: var(--cell-bg);
+    border: 1px solid var(--panel-edge); border-radius: 6px; padding: 8px 12px;
+    transition: border-color .25s;
+  }
+  .gpr.active { border-color: var(--gpr); }
+  .gpr .rname { color: var(--gpr); font-weight: 700; }
+  .gpr .rval { font-size: 17px; font-variant-numeric: tabular-nums; }
+  .gpr .rrole { font-size: 11px; color: var(--muted); font-family: -apple-system, "Segoe UI", sans-serif; }
+  .vecs { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .vreg {
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    background: var(--cell-bg); border: 1px solid var(--panel-edge); border-radius: 6px;
+    padding: 10px 12px; font-family: var(--mono); transition: border-color .25s;
+  }
+  .vreg .vname { font-weight: 700; }
+  .vreg .vsrc { font-size: 13px; color: var(--muted); }
+  .vreg.vm0 .vname { color: var(--vec); }
+  .vreg.vm1 .vname { color: var(--tgt); }
+  .vreg.vm0.loaded { border-color: var(--vec); }
+  .vreg.vm1.loaded { border-color: var(--tgt); }
+  .flags {
+    display: flex; gap: 8px; align-items: center; font-family: var(--mono); font-size: 13px;
+    background: var(--cell-bg); border: 1px dashed var(--panel-edge); border-radius: 6px;
+    padding: 8px 12px; color: var(--muted);
+  }
+  .flags .fv { color: var(--text); font-weight: 700; }
+  .flags .verdict { margin-left: auto; font-weight: 700; }
+  .flags .verdict.yes { color: var(--ok); }
+  .flags .verdict.no { color: var(--muted); }
+
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .cell, .gpr, .vreg, .cchip { transition: none; }
+  }
+</style>
+
+<div class="wrap">
+  <nav class="topnav">
+    <a href="../">← All lessons</a>
+    <span class="lang"><a href="viz.ru.html">RU</a> · <b>EN</b></span>
+  </nav>
+  <div>
+    <h1>The addressing formula: <code>[base + scale·index + disp]</code></h1>
+    <p class="sub">Every iteration <span style="color:var(--vec)">m0</span> reads sequentially from the pointer, while <span style="color:var(--tgt)">m1</span> aims via the full formula. Hit "Step" and watch the address assemble itself.</p>
+  </div>
+
+  <div class="panel">
+    <div class="formula">
+      <span>[</span><span class="fb">base</span><span class="op">+</span><span class="fi">scale·index</span><span class="op">+</span><span class="fd">disp</span><span>]</span>
+    </div>
+    <div class="fkey">
+      <span><b class="fb">base</b> — a pointer register (here: srcq)</span>
+      <span><b class="fi">scale</b> — only 1, 2, 4 or 8 · <b class="fi">index</b> — a register (here: r1q)</span>
+      <span><b class="fd">disp</b> — a constant known at assembly time (here: 3+mmsize)</span>
+    </div>
+  </div>
+
+  <div class="panel" style="display:flex;flex-direction:column;gap:14px">
+    <pre class="code" id="code"></pre>
+    <div class="narr" id="narr"></div>
+    <div class="controls">
+      <button class="primary" id="btnStep">Step →</button>
+      <button id="btnAuto">Auto ▸</button>
+      <button id="btnReset">Reset</button>
+      <span class="stepno" id="stepno"></span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="label">Address calculator — <b>where m1 reads from</b></div>
+    <div class="calc idle" id="calc">
+      <span class="op">[</span>
+      <div class="cchip cb"><small>base · srcq</small><span class="cv" id="cBase">—</span></div>
+      <span class="op">+</span>
+      <div class="cchip ci"><small>2 · r1q</small><span class="cv" id="cIdx">—</span></div>
+      <span class="op">+</span>
+      <div class="cchip cd"><small>disp · 3+16</small><span class="cv">19</span></div>
+      <span class="op">]</span>
+      <span class="op">=</span>
+      <div class="cchip ct"><small>address</small><span class="cv" id="cAddr">—</span></div>
+    </div>
+    <div class="calcnote">disp <code>3 + mmsize</code> is arithmetic between constants: the assembler folded it into <code>19</code> at build time. The CPU receives a ready-made number.</div>
+  </div>
+
+  <div class="panel">
+    <div class="label">Memory (RAM) — <b>bytes at addresses 1000–1079</b></div>
+    <div class="memscroll" id="mem"></div>
+  </div>
+
+  <div class="panel">
+    <div class="label">CPU — registers</div>
+    <div class="cpu">
+      <div class="gpr-box">
+        <div class="gpr" id="rsrc"><span><span class="rname">srcq</span><br><span class="rrole">base — "where from"</span></span><span class="rval" id="rsrcv">1000</span></div>
+        <div class="gpr" id="rr1"><span><span class="rname">r1q</span><br><span class="rrole">index and counter</span></span><span class="rval" id="rr1v">?</span></div>
+        <div class="flags" id="flags">after <b>dec</b>:&nbsp;<span id="flagtxt">—</span><span class="verdict" id="flagverdict"></span></div>
+      </div>
+      <div class="vecs">
+        <div class="vreg vm0" id="vm0"><span class="vname">m0</span><span class="vsrc" id="vm0s">empty</span></div>
+        <div class="vreg vm1" id="vm1"><span class="vname">m1</span><span class="vsrc" id="vm1s">empty</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel legend">
+    <span><i style="background:var(--vec)"></i>m0 window — 16 bytes from srcq</span>
+    <span><i style="background:var(--tgt)"></i>m1 window — 16 bytes from the computed address</span>
+    <span><i style="background:var(--gpr)"></i>srcq — the pointer</span>
+    <span><i style="background:var(--panel-edge);opacity:.5"></i>dimmed — already passed by the pointer</span>
+  </div>
+</div>
+
+<script>
+(() => {
+  const MM = 16, BASE = 1000, ROWS = 5, DISP = 19;
+
+  const CODE = [
+    [';static void simple_loop(const uint8_t *src)', 'cm'],
+    ['INIT_XMM sse2', 'kw'],
+    ['cglobal simple_loop, 1, 2, 2, src', 'kw'],
+    ['    movq r1q, 3', ''],
+    ['.loop:', ''],
+    ['    movu m0, [srcq]', ''],
+    ['    movu m1, [srcq + 2*r1q + 3 + mmsize]', ''],
+    ['', ''],
+    ['    ; some work', 'cm'],
+    ['', ''],
+    ['    add srcq, mmsize', ''],
+    ['    dec r1q', ''],
+    ['    jg .loop', ''],
+    ['', ''],
+    ['    RET', ''],
+  ];
+
+  // ── build simulation steps ──────────────────────────────────
+  function buildSteps() {
+    const S = [];
+    let src = BASE, r1 = null, m0 = null, m1 = null, calc = null;
+    const snap = (line, extra, narr) => S.push(Object.assign(
+      { line, src, r1, m0, m1, calc, flags: null, narr }, extra));
+
+    snap(3, {}, `<b>movq r1q, 3</b> — set up the loop counter. It will double as the <span class="v">index</span> in the address formula.`);
+    r1 = 3;
+    S[S.length - 1].r1 = 3;
+
+    for (let it = 1; it <= 3; it++) {
+      m0 = [src, src + MM - 1];
+      snap(5, { active: 'src' },
+        `Iteration ${it}/3. <b>movu m0, [srcq]</b> — the simplest case of the formula: <b>base</b> only. ` +
+        `Read 16 bytes starting at address <b>${src}</b> (window ${src}–${src + MM - 1}).`);
+
+      const addr = src + 2 * r1 + DISP;
+      m1 = [addr, addr + MM - 1];
+      calc = { src, r1, addr };
+      const shifted = it > 1 ? ` The window slid <span class="t">+14</span>: srcq grew by 16 while 2·r1q shrank by 2.` : '';
+      snap(6, { active: 'both', calcLive: true },
+        `Full formula: <b>${src}</b> + <span class="v">2·${r1} = ${2 * r1}</span> + <span class="k">19</span> = <span class="t">${addr}</span>. ` +
+        `Read 16 bytes starting at address <span class="t">${addr}</span>.${shifted}`);
+
+      snap(8, {},
+        `Here would be some useful work on m0 and m1 — addition, a filter, anything. Irrelevant for addressing.`);
+
+      const oldSrc = src;
+      src += MM;
+      snap(10, { active: 'src' },
+        `<b>add srcq, mmsize</b> — move the pointer forward 16 bytes: ${oldSrc} → <b>${src}</b>. Next iteration m0 will read from here.`);
+
+      const oldR1 = r1;
+      r1 -= 1;
+      snap(11, { active: 'r1', flags: { zf: r1 === 0 ? 1 : 0, sf: 0 } },
+        `<b>dec r1q</b> — counter: ${oldR1} → <b>${r1}</b>. As a side effect the instruction updated the flags (ZF, SF) — jg is about to consult them.`);
+
+      const taken = r1 > 0;
+      snap(12, { flags: { zf: r1 === 0 ? 1 : 0, sf: 0, verdict: taken } },
+        taken
+          ? `<b>jg .loop</b> — "jump if greater": r1q = ${r1} &gt; 0 → jump back to the <code>.loop</code> label.`
+          : `<b>jg .loop</b> — r1q = 0, the "&gt; 0" condition fails → fall through, the loop is over.`);
+    }
+
+    snap(14, {},
+      `<b>RET</b>. Result of three iterations: <span class="v">m0</span> read 48 bytes back-to-back (1000–1047), ` +
+      `while <span class="t">m1</span> aimed the formula at a new spot each time: <span class="t">1025, 1039, 1053</span> — the start slid 14 bytes right per iteration.`);
+    return S;
+  }
+
+  const STEPS = buildSteps();
+
+  // ── DOM ─────────────────────────────────────────────────────
+  const $ = id => document.getElementById(id);
+  const memEl = $('mem'), codeEl = $('code');
+  const cellEls = {};
+
+  // memory: 5 rows of 16 bytes + a marker row under each
+  for (let r = 0; r < ROWS; r++) {
+    const row = document.createElement('div');
+    row.className = 'memrow';
+    const a = document.createElement('span');
+    a.className = 'addr';
+    a.textContent = BASE + r * 16;
+    row.appendChild(a);
+    for (let c = 0; c < 16; c++) {
+      const addr = BASE + r * 16 + c;
+      const cell = document.createElement('span');
+      cell.className = 'cell';
+      cell.textContent = (addr * 13 + 7) % 100;
+      row.appendChild(cell);
+      cellEls[addr] = cell;
+    }
+    memEl.appendChild(row);
+    const prow = document.createElement('div');
+    prow.className = 'ptrrow';
+    prow.dataset.row = r;
+    memEl.appendChild(prow);
+  }
+
+  // code
+  CODE.forEach(([txt, cls], i) => {
+    const ln = document.createElement('span');
+    ln.className = 'ln' + (cls ? ' ' + cls : '');
+    ln.id = 'ln' + i;
+    ln.textContent = txt || ' ';
+    codeEl.appendChild(ln);
+  });
+
+  function marker(addr, cls, txt) {
+    const r = Math.floor((addr - BASE) / 16), c = (addr - BASE) % 16;
+    if (r < 0 || r >= ROWS) return;
+    const prow = memEl.querySelector(`.ptrrow[data-row="${r}"]`);
+    const p = document.createElement('span');
+    p.className = 'ptr ' + cls;
+    p.style.gridColumn = (c + 2) + ' / span 3';
+    p.style.justifySelf = 'start';
+    p.textContent = txt;
+    prow.appendChild(p);
+  }
+
+  // ── render one step ─────────────────────────────────────────
+  let cur = -1, timer = null;
+
+  function render() {
+    const s = STEPS[Math.max(cur, 0)];
+    const started = cur >= 0;
+
+    CODE.forEach((_, i) => $('ln' + i).classList.toggle('hl', started && s.line === i));
+    $('narr').innerHTML = started ? s.narr :
+      'Press "Step" to execute the first instruction. The r1q counter is not set yet.';
+    $('stepno').textContent = started ? `step ${cur + 1} / ${STEPS.length}` : `steps: ${STEPS.length}`;
+
+    // registers
+    $('rsrcv').textContent = started ? s.src : BASE;
+    $('rr1v').textContent = started && s.r1 !== null ? s.r1 : '?';
+    $('rsrc').classList.toggle('active', started && (s.active === 'src' || s.active === 'both'));
+    $('rr1').classList.toggle('active', started && (s.active === 'r1' || s.active === 'both'));
+
+    // m0 / m1
+    const m0 = started ? s.m0 : null, m1 = started ? s.m1 : null;
+    $('vm0s').textContent = m0 ? `bytes [${m0[0]} … ${m0[1]}]` : 'empty';
+    $('vm1s').textContent = m1 ? `bytes [${m1[0]} … ${m1[1]}]` : 'empty';
+    $('vm0').classList.toggle('loaded', !!m0);
+    $('vm1').classList.toggle('loaded', !!m1);
+
+    // calculator
+    const calc = started ? s.calc : null;
+    $('calc').classList.toggle('idle', !calc);
+    $('calc').classList.toggle('live', started && !!s.calcLive);
+    $('cBase').textContent = calc ? calc.src : '—';
+    $('cIdx').textContent = calc ? `2·${calc.r1}=${2 * calc.r1}` : '—';
+    $('cAddr').textContent = calc ? calc.addr : '—';
+
+    // flags
+    if (started && s.flags) {
+      $('flagtxt').innerHTML = `ZF=<span class="fv">${s.flags.zf}</span> SF=<span class="fv">${s.flags.sf}</span>`;
+      const v = $('flagverdict');
+      if ('verdict' in s.flags) {
+        v.textContent = s.flags.verdict ? 'jump ✓' : 'exit ✕';
+        v.className = 'verdict ' + (s.flags.verdict ? 'yes' : 'no');
+      } else { v.textContent = ''; }
+    } else {
+      $('flagtxt').textContent = '—';
+      $('flagverdict').textContent = '';
+    }
+
+    // memory
+    for (let addr = BASE; addr < BASE + ROWS * 16; addr++) {
+      const el = cellEls[addr];
+      el.className = 'cell';
+      if (!started) continue;
+      if (addr < s.src) el.classList.add('past');
+      if (m0 && addr >= m0[0] && addr <= m0[1]) { el.classList.add('m0'); el.classList.remove('past'); }
+      if (m1 && addr >= m1[0] && addr <= m1[1]) { el.classList.add('m1'); el.classList.remove('past'); }
+    }
+    memEl.querySelectorAll('.ptr').forEach(p => p.remove());
+    if (started) {
+      marker(s.src, 'psrc', '↑srcq');
+      if (m1) marker(m1[0], 'pm1', '↑m1');
+    }
+  }
+
+  function step() {
+    if (cur < STEPS.length - 1) { cur++; render(); }
+    else stopAuto();
+    if (cur === STEPS.length - 1) stopAuto();
+  }
+  function stopAuto() {
+    if (timer) { clearInterval(timer); timer = null; $('btnAuto').textContent = 'Auto ▸'; }
+  }
+  $('btnStep').addEventListener('click', () => { stopAuto(); step(); });
+  $('btnAuto').addEventListener('click', () => {
+    if (timer) { stopAuto(); return; }
+    $('btnAuto').textContent = 'Pause ⏸';
+    step();
+    timer = setInterval(step, 1600);
+  });
+  $('btnReset').addEventListener('click', () => { stopAuto(); cur = -1; render(); });
+
+  render();
+})();
+</script>
