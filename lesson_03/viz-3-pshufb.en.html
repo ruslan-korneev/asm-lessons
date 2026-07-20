@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 3.3 — pshufb: the most important instruction in video processing</title>
+<link rel="stylesheet" href="../assets/viz.css">
+<style>
+  .shufrow { margin-top: 10px; }
+  .vcell.clickable { cursor: pointer; }
+  .vcell.clickable:hover { border-color: var(--gpr); }
+</style>
+
+<div class="wrap">
+  <nav class="topnav">
+    <a href="../">← All lessons</a>
+    <span>Lesson 3 · part 3 of 3</span>
+    <span class="lang"><a href="viz-3-pshufb.ru.html">RU</a> · <b>EN</b></span>
+  </nav>
+  <div>
+    <h1><code>pshufb</code> — shuffling bytes based on a mask</h1>
+    <p class="sub">Shuffle (permute) — per the lesson, arguably the most important instruction in video processing. Each mask byte is an index: "which source byte goes here". Press "Step" or click the result cells.</p>
+  </div>
+
+  <div class="panel codegrid">
+    <div>
+      <div class="vreg" id="rsrc">
+        <div class="vname">m0 <span>— source (before pshufb): letter bytes, so you can see who moved where</span></div>
+        <div class="vcells-scroll"><div class="vcells" id="csrc"></div></div>
+      </div>
+      <div class="vreg shufrow" id="rmask">
+        <div class="vname">m1 <span>— mask: source indices, −1 = "zero out"</span></div>
+        <div class="vcells-scroll"><div class="vcells" id="cmask"></div></div>
+      </div>
+      <div class="vreg shufrow" id="rdst">
+        <div class="vname">m0 <span>— result (after pshufb) — click the cells</span></div>
+        <div class="vcells-scroll"><div class="vcells" id="cdst"></div></div>
+      </div>
+    </div>
+    <pre class="code" id="code"></pre>
+    <div class="narr" id="narr">Left to right: <b>pshufb m0, m1</b> handles all 16 result positions at once — but we will walk through them one by one. Press "Step".</div>
+    <div class="controls">
+      <button class="primary" id="btnStep">Step →</button>
+      <button id="btnAll">All at once</button>
+      <button id="btnReset">Reset</button>
+      <span class="stepno" id="stepno"></span>
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--vec)"></i>source</span>
+      <span><i style="background:var(--ok)"></i>filled result</span>
+      <span><i style="background:var(--bad)"></i>index −1 → byte is zeroed</span>
+      <span><i style="background:var(--gpr)"></i>current triple "index → source → result"</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="label">The same thing in C — <b>except in SIMD all 16 iterations happen in parallel</b></div>
+    <pre class="code">uint8_t tmp[16];
+memcpy(tmp, dst, 16);
+for (int i = 0; i &lt; 16; i++) {
+    if (src[i] &amp; 0x80)      /* MSB of the index is set (−1) */
+        dst[i] = 0;
+    else
+        dst[i] = tmp[src[i]];
+}</pre>
+  </div>
+
+  <nav class="pagenav">
+    <a href="viz-2-unpack.en.html">← Part 2 — range extension</a>
+    <span class="off"></span>
+  </nav>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const SRC = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P'];
+  const MASK = [4, 3, 1, 2, -1, 2, 3, 7, 5, 4, 3, 8, 12, 13, 15, -1];
+
+  const CODE = [
+    'SECTION_RODATA',
+    '',
+    'shuffle_mask: db 4, 3, 1, 2, -1, 2, 3, 7, 5, 4, 3, 8, 12, 13, 15, -1',
+    '',
+    'section .text',
+    '',
+    'movu   m0, [srcq]',
+    'movu   m1, [shuffle_mask]',
+    'pshufb m0, m1 ; shuffle m0 based on m1',
+  ];
+
+  const codeEl = $('code');
+  CODE.forEach((t, i) => {
+    const s = document.createElement('span');
+    s.className = 'ln' + (i === 2 ? ' kw' : '') + (i === 8 ? ' hl' : '');
+    s.textContent = t || ' ';
+    codeEl.appendChild(s);
+  });
+
+  let filled = 0;      // how many result positions are filled so far
+  let inspect = -1;    // which position is being explained in narr
+
+  const srcEls = [], maskEls = [], dstEls = [];
+  function build() {
+    SRC.forEach((ch, i) => {
+      const c = document.createElement('span');
+      c.className = 'vcell lo'; c.textContent = ch;
+      $('csrc').appendChild(c); srcEls.push(c);
+    });
+    MASK.forEach((m, i) => {
+      const c = document.createElement('span');
+      c.className = 'vcell' + (m < 0 ? ' neg' : '');
+      c.textContent = m;
+      $('cmask').appendChild(c); maskEls.push(c);
+    });
+    SRC.forEach((_, i) => {
+      const c = document.createElement('span');
+      c.className = 'vcell clickable'; c.textContent = '·';
+      c.setAttribute('tabindex', '0');
+      c.setAttribute('role', 'button');
+      const pick = ev => {
+        if (ev.type === 'keydown' && ev.key !== 'Enter' && ev.key !== ' ') return;
+        ev.preventDefault();
+        if (i < filled) { inspect = i; render(); }
+      };
+      c.addEventListener('click', pick);
+      c.addEventListener('keydown', pick);
+      $('cdst').appendChild(c); dstEls.push(c);
+    });
+  }
+  build();
+
+  function resultAt(i) { return MASK[i] < 0 ? '0' : SRC[MASK[i]]; }
+
+  function render() {
+    for (let i = 0; i < 16; i++) {
+      const d = dstEls[i];
+      d.className = 'vcell clickable';
+      if (i < filled) {
+        d.textContent = resultAt(i);
+        d.classList.add(MASK[i] < 0 ? 'neg' : 'zero');
+      } else d.textContent = '·';
+      maskEls[i].classList.remove('pick');
+      srcEls[i].classList.remove('pick');
+      d.classList.remove('pick');
+    }
+    if (inspect >= 0) {
+      const i = inspect, m = MASK[i];
+      dstEls[i].classList.add('pick');
+      maskEls[i].classList.add('pick');
+      if (m >= 0) srcEls[m].classList.add('pick');
+      $('narr').innerHTML = m < 0
+        ? `Position <b>${i}</b>: the mask index = <span class="x">−1</span>. As a byte, −1 is 0b11111111 — the MSB (0x80) is set → pshufb's rule: <b>zero out</b>. dst[${i}] = 0. A handy trick: writing −1 instead of 0x80 reads more easily.`
+        : `Position <b>${i}</b>: the mask says "take byte #${m}" → that is <span class="v">${SRC[m]}</span>. dst[${i}] = src[${m}] = <b>${SRC[m]}</b>. Note: the same source byte can be taken any number of times — the mask decides everything.`;
+    } else if (filled === 0) {
+      $('narr').innerHTML = 'Left to right: <b>pshufb m0, m1</b> handles all 16 result positions at once — but we will walk through them one by one. Press "Step".';
+    } else if (filled === 16) {
+      $('narr').innerHTML = '<b>Done.</b> 16 moves in a single instruction: bytes duplicated (D appears three times), rearranged, and two positions zeroed by −1 masks. This is exactly how video code shuffles color channels, reverses byte order and assembles pixels from planes. Click the result cells — I will show where each byte came from.';
+    }
+    $('stepno').textContent = `filled ${filled} / 16`;
+    $('btnStep').disabled = filled === 16;
+  }
+
+  $('btnStep').addEventListener('click', () => {
+    if (filled < 16) { inspect = filled; filled++; render(); }
+  });
+  $('btnAll').addEventListener('click', () => { filled = 16; inspect = -1; render(); });
+  $('btnReset').addEventListener('click', () => { filled = 0; inspect = -1; render(); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); if (filled < 16) { inspect = filled; filled++; render(); } }
+  });
+
+  render();
+})();
+</script>

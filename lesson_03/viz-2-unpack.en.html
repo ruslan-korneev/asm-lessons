@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 3.2 — Range extension: punpcklbw / punpckhbw</title>
+<link rel="stylesheet" href="../assets/viz.css">
+
+<div class="wrap">
+  <nav class="topnav">
+    <a href="../">← All lessons</a>
+    <span>Lesson 3 · part 2 of 3</span>
+    <span class="lang"><a href="viz-2-unpack.ru.html">RU</a> · <b>EN</b></span>
+  </nav>
+  <div>
+    <h1>Range extension: bytes → words without overflow</h1>
+    <p class="sub">200 + 100 in a byte already overflows. The fix: before doing arithmetic, "unpack" the bytes into 16-bit words. Interleave with zeros — zero extension; interleave with a sign mask — sign extension.</p>
+  </div>
+
+  <div class="panel codegrid">
+    <div class="tabs">
+      <button id="tabU" class="on">unsigned — zero extension</button>
+      <button id="tabS">signed — sign extension</button>
+    </div>
+    <div>
+      <div class="vreg" id="rm0">
+        <div class="vname">m0 <span id="lm0">— original 16 bytes</span></div>
+        <div class="vcells-scroll"><div class="vcells" id="cm0"></div></div>
+      </div>
+      <div class="vreg" style="margin-top:10px" id="rm1">
+        <div class="vname">m1 <span id="lm1">— copy</span></div>
+        <div class="vcells-scroll"><div class="vcells" id="cm1"></div></div>
+      </div>
+      <div class="vreg" style="margin-top:10px" id="rm2">
+        <div class="vname">m2 <span id="lm2">— second interleave operand</span></div>
+        <div class="vcells-scroll"><div class="vcells" id="cm2"></div></div>
+      </div>
+    </div>
+    <pre class="code" id="code"></pre>
+    <div class="narr" id="narr"></div>
+    <div class="controls">
+      <button class="primary" id="btnStep">Step →</button>
+      <button id="btnBack">← Back</button>
+      <button id="btnReset">Reset</button>
+      <span class="stepno" id="stepno"></span>
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--vec)"></i>low half → punpck<b>l</b>bw</span>
+      <span><i style="background:var(--tgt)"></i>high half → punpck<b>h</b>bw</span>
+      <span><i style="background:var(--bad)"></i>negative byte / 0xFF mask</span>
+    </div>
+  </div>
+
+  <nav class="pagenav">
+    <a href="viz-1-offset-trick.en.html">← Part 1 — the offset trick</a>
+    <a href="viz-3-pshufb.en.html">Part 3 — pshufb →</a>
+  </nav>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const BYTES_U = [200, 30, 255, 7, 64, 129, 3, 250, 17, 88, 140, 66, 201, 5, 90, 180];
+  const BYTES_S = [-2, 5, -120, 100, 7, -1, 33, -64, 90, -13, 0, 127, -128, 45, -7, 12];
+
+  const VARIANTS = {
+    U: {
+      bytes: BYTES_U,
+      code: ['pxor      m2, m2 ; zero out m2',
+             '',
+             'movu      m0, [srcq]',
+             'movu      m1, m0 ; copy m0 to m1',
+             'punpcklbw m0, m2',
+             'punpckhbw m1, m2'],
+      steps: [
+        { l: -1, m0: null, m1: null, m2: null,
+          narr: '<b>The task.</b> Memory holds 16 unsigned bytes, among them 200 and 250. Add anything large to them and you overflow: a byte holds at most 255. So we extend each byte to a word (16 bits).' },
+        { l: 0, m0: null, m1: null, m2: 'z',
+          narr: '<b>pxor m2, m2</b> — the familiar zeroing idiom, now in vector form: m2 = 16 zero bytes. These zeros will become the high halves of the future words.' },
+        { l: 2, m0: 'b', m1: null, m2: 'z',
+          narr: '<b>movu m0, [srcq]</b> — 16 source bytes into m0. The halves are highlighted: <span class="v">low</span> and <span class="t">high</span> — their fates will diverge.' },
+        { l: 3, m0: 'b', m1: 'b', m2: 'z',
+          narr: '<b>movu m1, m0</b> — a copy. Why: punpck overwrites its first operand, and we need both halves. In the next lesson, three-operand AVX will make this copy unnecessary.' },
+        { l: 4, m0: 'wl', m1: 'b', m2: 'z',
+          narr: '<b>punpcklbw m0, m2</b> — "unpack low bytes to words": the low 8 bytes of m0 are interleaved with the low 8 bytes of m2 (zeros): byte, zero, byte, zero… Each "byte+00" pair = a ready 16-bit word with the same value. That is <b>zero extension</b>.' },
+        { l: 5, m0: 'wl', m1: 'wh', m2: 'z',
+          narr: '<b>punpckhbw m1, m2</b> — the same for the <span class="t">high</span> 8 bytes (from the copy). Result: 16 bytes in one register became 16 words in two. Now any arithmetic is overflow-free, and packuswb takes them back to bytes (saturating large values to 255).' },
+      ]
+    },
+    S: {
+      bytes: BYTES_S,
+      code: ['pxor      m2, m2 ; zero out m2',
+             '',
+             'movu      m0, [srcq]',
+             'movu      m1, m0 ; copy m0 to m1',
+             '',
+             'pcmpgtb   m2, m0',
+             'punpcklbw m0, m2',
+             'punpckhbw m1, m2'],
+      steps: [
+        { l: -1, m0: null, m1: null, m2: null,
+          narr: '<b>A harder task:</b> the bytes are signed, among them −2 and −128. Padding with zeros won\'t do: −2 = 0b11111110, and the word 0x00FE is +254 — the sign is lost. We need <b>sign extension</b>: replicating the sign bit.' },
+        { l: 0, m0: null, m1: null, m2: 'z',
+          narr: '<b>pxor m2, m2</b> — we start the same way, m2 = zeros.' },
+        { l: 2, m0: 'b', m1: null, m2: 'z',
+          narr: '<b>movu m0, [srcq]</b> — 16 signed bytes. The <span class="x">red</span> ones are negative: their most significant bit = 1.' },
+        { l: 3, m0: 'b', m1: 'b', m2: 'z',
+          narr: '<b>movu m1, m0</b> — a copy, as before.' },
+        { l: 5, m0: 'b', m1: 'b', m2: 'm',
+          narr: '<b>pcmpgtb m2, m0</b> — "packed compare greater than byte": for each byte it evaluates "0 &gt; byte?". Yes → all bits set (−1, i.e. 0xFF), no → zeros. The result is a <b>sign mask</b>: 0xFF opposite every negative byte.' },
+        { l: 6, m0: 'wl', m1: 'b', m2: 'm',
+          narr: '<b>punpcklbw m0, m2</b> — the same interleave, but with the mask as the second operand: a negative byte gets a high half of 0xFF → the word 0xFFFE = −2. Sign preserved. A positive byte gets 0x00, as before.' },
+        { l: 7, m0: 'wl', m1: 'wh', m2: 'm',
+          narr: '<b>punpckhbw m1, m2</b> — the high half. Same outcome — 16 words in two registers — at the cost of one extra instruction (pcmpgtb) compared to the unsigned case.' },
+      ]
+    }
+  };
+
+  let variant = 'U', cur = 0;
+
+  function cells(el, mode, bytes, signed) {
+    el.classList.remove('w8');
+    el.innerHTML = '';
+    if (mode === null) {
+      for (let i = 0; i < 16; i++) el.appendChild(vc('·', ''));
+    } else if (mode === 'z') {
+      for (let i = 0; i < 16; i++) el.appendChild(vc('0', 'zero'));
+    } else if (mode === 'm') {
+      for (let i = 0; i < 16; i++) el.appendChild(vc(bytes[i] < 0 ? '-1' : '0', bytes[i] < 0 ? 'neg' : 'zero'));
+    } else if (mode === 'b') {
+      for (let i = 0; i < 16; i++) {
+        let cls = i < 8 ? 'lo' : 'hi';
+        if (signed && bytes[i] < 0) cls = 'neg';
+        el.appendChild(vc(bytes[i], cls));
+      }
+    } else if (mode === 'wl' || mode === 'wh') {
+      el.classList.add('w8');
+      const off = mode === 'wl' ? 0 : 8;
+      for (let i = 0; i < 8; i++) {
+        const v = bytes[off + i];
+        let cls = mode === 'wl' ? 'lo' : 'hi';
+        if (signed && v < 0) cls = 'neg';
+        el.appendChild(vc(v, cls));
+      }
+    }
+  }
+  function vc(txt, cls) {
+    const c = document.createElement('span');
+    c.className = 'vcell' + (cls ? ' ' + cls : '');
+    c.textContent = txt;
+    return c;
+  }
+
+  function render() {
+    const v = VARIANTS[variant], st = v.steps[cur], signed = variant === 'S';
+    const codeEl = $('code');
+    codeEl.innerHTML = '';
+    v.code.forEach((t, i) => {
+      const s = document.createElement('span');
+      s.className = 'ln' + (i === st.l ? ' hl' : '');
+      s.textContent = t || ' ';
+      codeEl.appendChild(s);
+    });
+    cells($('cm0'), st.m0, v.bytes, signed);
+    cells($('cm1'), st.m1, v.bytes, signed);
+    cells($('cm2'), st.m2, v.bytes, signed);
+    $('lm0').textContent = st.m0 === 'wl' ? '— low 8 bytes, now words' : '— original 16 bytes';
+    $('lm1').textContent = st.m1 === 'wh' ? '— high 8 bytes, now words' : '— copy';
+    $('lm2').textContent = st.m2 === 'm' ? '— sign mask from pcmpgtb' : '— second interleave operand';
+    $('narr').innerHTML = st.narr;
+    $('stepno').textContent = `step ${cur} / ${v.steps.length - 1}`;
+    $('btnStep').disabled = cur === v.steps.length - 1;
+    $('btnBack').disabled = cur === 0;
+  }
+
+  function setVariant(v) {
+    variant = v; cur = 0;
+    $('tabU').classList.toggle('on', v === 'U');
+    $('tabS').classList.toggle('on', v === 'S');
+    render();
+  }
+
+  $('tabU').addEventListener('click', () => setVariant('U'));
+  $('tabS').addEventListener('click', () => setVariant('S'));
+  $('btnStep').addEventListener('click', () => { if (cur < VARIANTS[variant].steps.length - 1) { cur++; render(); } });
+  $('btnBack').addEventListener('click', () => { if (cur > 0) { cur--; render(); } });
+  $('btnReset').addEventListener('click', () => { cur = 0; render(); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); const n = VARIANTS[variant].steps.length; if (cur < n - 1) { cur++; render(); } }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); if (cur > 0) { cur--; render(); } }
+  });
+
+  render();
+})();
+</script>

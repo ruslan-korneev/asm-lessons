@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Урок 2.1 — Циклы и переходы: метки, FLAGS, jg/jl</title>
+<link rel="stylesheet" href="../assets/viz.css">
+<style>
+  .twocol { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 640px) { .twocol { grid-template-columns: 1fr; } }
+  .codehead { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; font-weight: 600; }
+</style>
+
+<div class="wrap">
+  <nav class="topnav">
+    <a href="../">← Все уроки</a>
+    <span>Урок 2 · часть 1 из 3</span>
+    <span class="lang"><b>RU</b> · <a href="viz-1-loops.en.html">EN</a></span>
+  </nav>
+  <div>
+    <h1>Циклы и переходы: метки, <code>FLAGS</code> и условные прыжки</h1>
+    <p class="sub">Один и тот же цикл двумя способами. Следи за регистром флагов: каждая арифметическая инструкция оставляет в нём «отпечаток», а условный прыжок читает его и решает — прыгать или нет.</p>
+  </div>
+
+  <div class="panel codegrid">
+    <div class="tabs">
+      <button id="tabA" class="on">do-while: dec + jg</button>
+      <button id="tabB">for: xor + inc + cmp + jl</button>
+    </div>
+    <div class="scalar">
+      <div>
+        <div class="biggpr">
+          <div class="rname">r0q</div>
+          <div class="rval" id="rval">?</div>
+        </div>
+        <div class="flags" id="flags" style="margin-top:10px">
+          <span>FLAGS:</span><span id="flagtxt">не тронуты</span><span class="verdict" id="flagverdict"></span>
+        </div>
+      </div>
+      <div>
+        <div class="twocol">
+          <div>
+            <div class="codehead">ассемблер</div>
+            <pre class="code" id="asmcode"></pre>
+          </div>
+          <div>
+            <div class="codehead">эквивалент на C</div>
+            <pre class="code" id="ccode"></pre>
+          </div>
+        </div>
+        <div class="narr" id="narr" style="margin-top:12px"></div>
+        <div class="controls" style="margin-top:12px">
+          <button class="primary" id="btnStep">Шаг →</button>
+          <button id="btnBack">← Назад</button>
+          <button id="btnReset">Сброс</button>
+          <span class="stepno" id="stepno"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="label">Мнемоники переходов — <b>кликай по строкам</b></div>
+    <div class="tablescroll">
+      <table class="mnem" id="mnem">
+        <thead><tr><th>Мнемоника</th><th>Прыжок, если…</th><th>FLAGS</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="narr" id="mnemexpl" style="margin-top:12px">Кликни по мнемонике — расскажу, когда она срабатывает и с чем её обычно используют.</div>
+  </div>
+
+  <nav class="pagenav">
+    <a href="../lesson_01/viz-3-add-values.ru.html">← Урок 1, часть 3 — add_values</a>
+    <a href="viz-2-addressing.ru.html">Часть 2 — адресация →</a>
+  </nav>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+
+  // ── два варианта цикла ──────────────────────────────────────
+  const VARIANTS = {
+    A: {
+      asm: ['mov  r0q, 3', '.loop:', '    ; какая-то работа', '    dec  r0q', '    jg   .loop'],
+      c:   ['int i = 3;', 'do {', '    // какая-то работа', '    i--;', '} while (i > 0);'],
+      build() {
+        const S = [];
+        S.push({ a: -1, c: -1, r: '?', f: null,
+          narr: '<b>Старт.</b> В r0q — мусор. Нажимай «Шаг»: слева ассемблер, справа — что это значит на C.' });
+        S.push({ a: 0, c: 0, r: 3, f: null,
+          narr: '<b>mov r0q, 3</b> — счётчик готов. Заметь: <b>mov флаги не трогает</b> — FLAGS всё ещё в неопределённом состоянии.' });
+        let r = 3;
+        while (true) {
+          S.push({ a: 2, c: 2, r, f: null,
+            narr: `Итерация с r0q = ${r}. Здесь была бы полезная работа. Метка <code>.loop:</code> — не инструкция, просто именованная точка в коде; точка спереди делает её локальной для функции.` });
+          r--;
+          S.push({ a: 3, c: 3, r, f: { zf: r === 0 ? 1 : 0, sf: 0 },
+            narr: `<b>dec r0q</b> → ${r}. Главное: dec <b>обновил FLAGS</b> по результату — ZF=${r === 0 ? 1 : 0} (${r === 0 ? 'ноль!' : 'не ноль'}), SF=0 (не отрицательное). Это бесплатно, отдельной проверки не нужно.` });
+          const taken = r > 0;
+          S.push({ a: 4, c: 4, r, f: { zf: r === 0 ? 1 : 0, sf: 0, verdict: taken },
+            narr: taken
+              ? `<b>jg .loop</b> — читает FLAGS: ZF=0 и SF=OF → «больше нуля» → <span class="k">прыжок</span> на метку.`
+              : `<b>jg .loop</b> — ZF=1 → «больше нуля» ложно → <span class="x">прыжка нет</span>, проваливаемся дальше. Цикл сделал ровно 3 итерации.` });
+          if (!taken) break;
+        }
+        S.push({ a: -1, c: -1, r: 0, f: null,
+          narr: '<b>Итог.</b> 5 строк, ни одной лишней: dec сам выставил флаги, jg их прочитал. Это «do-while»-стиль — тело выполняется хотя бы раз, условие в конце. В asm циклы пишут именно так.' });
+        return S;
+      }
+    },
+    B: {
+      asm: ['xor  r0q, r0q', '.loop:', '    ; какая-то работа', '    inc  r0q', '    cmp  r0q, 3', '    jl   .loop'],
+      c:   ['int i;', 'for (i = 0;', '     i < 3;', '     i++) {', '    // какая-то работа', '}'],
+      build() {
+        const S = [];
+        S.push({ a: -1, c: -1, r: '?', f: null,
+          narr: '<b>Старт.</b> Попробуем повторить привычный C-шный for. Спойлер: получится на инструкцию длиннее.' });
+        S.push({ a: 0, c: 1, r: 0, f: { zf: 1, sf: 0 },
+          narr: '<b>xor r0q, r0q</b> — «число XOR само с собой» всегда 0. Это идиома обнуления: быстрее, чем mov r0q, 0 — загрузки значения не происходит. Для SIMD то же самое делает <code>pxor m0, m0</code>. Бонус-факт: xor тоже ставит флаги (ZF=1).' });
+        let r = 0;
+        while (true) {
+          S.push({ a: 2, c: 4, r, f: null,
+            narr: `Итерация с r0q = ${r}. Полезная работа.` });
+          r++;
+          S.push({ a: 3, c: 3, r, f: { zf: 0, sf: 0 },
+            narr: `<b>inc r0q</b> → ${r}. Флаги обновились, но нам они не помогут: сравнивать-то надо с тройкой, а inc про неё ничего не знает.` });
+          const diff = r - 3;
+          const taken = diff < 0;
+          S.push({ a: 4, c: 2, r, f: { zf: diff === 0 ? 1 : 0, sf: diff < 0 ? 1 : 0 },
+            narr: `<b>cmp r0q, 3</b> — вычисляет r0q − 3 = ${diff}, результат <b>выбрасывает</b>, оставляет только FLAGS: ZF=${diff === 0 ? 1 : 0}, SF=${diff < 0 ? 1 : 0}. cmp — это «вычитание ради флагов».` });
+          S.push({ a: 5, c: 2, r, f: { zf: diff === 0 ? 1 : 0, sf: diff < 0 ? 1 : 0, verdict: taken },
+            narr: taken
+              ? `<b>jl .loop</b> — SF≠OF → «меньше нуля» → r0q &lt; 3 → <span class="k">прыжок</span>.`
+              : `<b>jl .loop</b> — разность равна нулю, SF=OF → условие ложно → <span class="x">выход</span> после 3 итераций.` });
+          if (!taken) break;
+        }
+        S.push({ a: -1, c: -1, r: 3, f: null,
+          narr: '<b>Итог.</b> Тот же цикл, но 6 строк вместо 5: понадобился отдельный cmp. Меньше инструкций = быстрее код → вариант с dec+jg предпочтительнее. Мы пишем циклы не «как в C», а как быстрее в ассемблере.' });
+        return S;
+      }
+    }
+  };
+
+  let variant = 'A', STEPS = VARIANTS.A.build(), cur = 0;
+
+  function renderCode() {
+    const v = VARIANTS[variant];
+    const put = (el, lines, hlIdx) => {
+      el.innerHTML = '';
+      lines.forEach((t, i) => {
+        const s = document.createElement('span');
+        s.className = 'ln' + (t.trim().startsWith(';') || t.trim().startsWith('//') ? ' cm' : '') + (i === hlIdx ? ' hl' : '');
+        s.textContent = t || ' ';
+        el.appendChild(s);
+      });
+    };
+    const st = STEPS[cur];
+    put($('asmcode'), v.asm, st.a);
+    put($('ccode'), v.c, st.c);
+  }
+
+  function render() {
+    const st = STEPS[cur];
+    renderCode();
+    $('rval').textContent = st.r;
+    if (st.f) {
+      $('flagtxt').innerHTML = `ZF=<span class="fv">${st.f.zf}</span> SF=<span class="fv">${st.f.sf}</span>`;
+      $('flags').classList.add('touched');
+      const v = $('flagverdict');
+      if ('verdict' in st.f) {
+        v.textContent = st.f.verdict ? 'прыжок ✓' : 'выход ✕';
+        v.className = 'verdict ' + (st.f.verdict ? 'yes' : 'no');
+      } else v.textContent = '';
+    } else {
+      $('flagtxt').textContent = cur === 0 ? 'не тронуты' : 'без изменений';
+      $('flags').classList.remove('touched');
+      $('flagverdict').textContent = '';
+    }
+    $('narr').innerHTML = st.narr;
+    $('stepno').textContent = `шаг ${cur} / ${STEPS.length - 1}`;
+    $('btnStep').disabled = cur === STEPS.length - 1;
+    $('btnBack').disabled = cur === 0;
+  }
+
+  function setVariant(v) {
+    variant = v;
+    STEPS = VARIANTS[v].build();
+    cur = 0;
+    $('tabA').classList.toggle('on', v === 'A');
+    $('tabB').classList.toggle('on', v === 'B');
+    render();
+  }
+
+  $('tabA').addEventListener('click', () => setVariant('A'));
+  $('tabB').addEventListener('click', () => setVariant('B'));
+  $('btnStep').addEventListener('click', () => { if (cur < STEPS.length - 1) { cur++; render(); } });
+  $('btnBack').addEventListener('click', () => { if (cur > 0) { cur--; render(); } });
+  $('btnReset').addEventListener('click', () => { cur = 0; render(); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); if (cur < STEPS.length - 1) { cur++; render(); } }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); if (cur > 0) { cur--; render(); } }
+  });
+
+  render();
+
+  // ── таблица мнемоник ────────────────────────────────────────
+  const MNEM = [
+    ['JE / JZ', 'равно / ноль', 'ZF = 1',
+     '<b>JE / JZ</b> — два имени одной инструкции. После <code>cmp a, b</code> равенство означает a−b = 0 → ZF=1. После арифметики JZ читается естественнее: «результат — ноль?»'],
+    ['JNE / JNZ', 'не равно / не ноль', 'ZF = 0',
+     '<b>JNE / JNZ</b> — зеркало предыдущей: прыжок, пока значения различаются. Типичный цикл «пока не ноль»: dec + jnz.'],
+    ['JG / JNLE', 'больше (знаковое)', 'ZF = 0 и SF = OF',
+     '<b>JG</b> — «jump if greater». Наш вариант A: dec выставил флаги, jg прыгает, пока счётчик &gt; 0. Знаковое сравнение: −1 сюда не пройдёт.'],
+    ['JGE / JNL', 'больше или равно (знаковое)', 'SF = OF',
+     '<b>JGE</b> — как JG, но и при равенстве тоже прыгает. Удобно для условий вида «пока i ≥ 0».'],
+    ['JL / JNGE', 'меньше (знаковое)', 'SF ≠ OF',
+     '<b>JL</b> — «jump if less». Наш вариант B: cmp r0q, 3 вычислил разность, jl прыгает, пока она отрицательная, то есть r0q &lt; 3. В уроке 3 этот же jl крутит цикл с отрицательным счётчиком-смещением.'],
+    ['JLE / JNG', 'меньше или равно (знаковое)', 'ZF = 1 или SF ≠ OF',
+     '<b>JLE</b> — «меньше или равно»: срабатывает и на отрицательной разности, и на нулевой.'],
+  ];
+  const tbody = document.querySelector('#mnem tbody');
+  MNEM.forEach((m, i) => {
+    const tr = document.createElement('tr');
+    tr.className = 'clickable';
+    tr.setAttribute('tabindex', '0');
+    tr.innerHTML = `<td>${m[0]}</td><td>${m[1]}</td><td>${m[2]}</td>`;
+    const pick = ev => {
+      if (ev.type === 'keydown' && ev.key !== 'Enter' && ev.key !== ' ') return;
+      ev.preventDefault();
+      tbody.querySelectorAll('tr').forEach(r => r.classList.remove('sel'));
+      tr.classList.add('sel');
+      $('mnemexpl').innerHTML = m[3];
+    };
+    tr.addEventListener('click', pick);
+    tr.addEventListener('keydown', pick);
+    tbody.appendChild(tr);
+  });
+})();
+</script>

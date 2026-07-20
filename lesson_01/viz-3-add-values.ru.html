@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Урок 1.3 — add_values построчно</title>
+<link rel="stylesheet" href="../assets/viz.css">
+
+<div class="wrap">
+  <nav class="topnav">
+    <a href="../">← Все уроки</a>
+    <span>Урок 1 · часть 3 из 3</span>
+    <span class="lang"><b>RU</b> · <a href="viz-3-add-values.en.html">EN</a></span>
+  </nav>
+  <div>
+    <h1><span style="font-family:var(--mono)">add_values</span> построчно</h1>
+    <p class="sub">Первая настоящая SIMD-функция из урока. Кликай по строкам кода — каждая объясняется. Строка cglobal разобрана по токенам.</p>
+  </div>
+
+  <div class="panel">
+    <pre class="code" id="f_code"></pre>
+    <div class="chips" id="f_chips" hidden></div>
+    <div class="narr" id="f_expl" style="margin-top:12px"></div>
+  </div>
+
+  <nav class="pagenav">
+    <a href="viz-2-scalar.ru.html">← Часть 2 — скалярный asm</a>
+    <a href="../lesson_02/viz-1-loops.ru.html">Урок 2, часть 1 — циклы и переходы →</a>
+  </nav>
+</div>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var LINES = [
+    { t: '%include "x86inc.asm"',
+      e: "<b>Подключение x86inc.asm</b> — «заголовок» от сообществ x264 / FFmpeg / dav1d. Даёт всё, чем мы пользовались: имена r0/r1 вместо сырых имён регистров, m0/m1 вместо xmm0/xmm1, макросы cglobal и RET. Без него — голый nasm, где всё это пришлось бы делать руками." },
+    { t: "" },
+    { t: "SECTION .text",
+      e: "<b>Секция кода.</b> Исполняемые инструкции живут в .text. Константы (как наша пачка десяток [10×16] из части 1) кладут в другую секцию — .data. Урок 3 покажет это на практике." },
+    { t: "" },
+    { t: ";static void add_values(uint8_t *src, const uint8_t *src2)",
+      e: "<b>Комментарий.</b> Точка с запятой «;» в asm = «//» в C. Здесь принято писать C-сигнатуру функции, чтобы читатель сразу видел: два указателя на байты, ничего не возвращает." },
+    { t: "INIT_XMM sse2",
+      e: "<b>Выбор ширины и набора инструкций.</b> «Эта функция работает с xmm-регистрами (128 бит = пачки по 16 байт), используя инструкции из набора sse2» — paddb как раз оттуда. Помнишь вопрос, почему берём по 16 байт? Вот где это решается: поменяй строку на INIT_YMM avx2 — и тот же самый код с m0 поедет окном 32 байта." },
+    { t: "cglobal add_values, 2, 2, 2, src, src2",
+      e: "<b>Главная строка: объявление C-функции.</b> После неё из C можно вызвать add_values(src, src2) как обычную функцию. Числа и имена — кликай токены ниже, каждый объясняется.", chips: true },
+    { t: "    movu  m0, [srcq]",
+      e: "<b>LOAD — ты это уже видел в части 1.</b> Скобки = разыменование: «сходи по адресу в srcq, возьми 16 байт → в m0». Это *src из C. Регистр srcq появился из имени «src» в cglobal + суффикс «q»: сам указатель 64-битный, но грузим мы 128 бит данных." },
+    { t: "    movu  m1, [src2q]",
+      e: "<b>Второй LOAD.</b> 16 байт по адресу src2q → в m1. Теперь оба векторных регистра заряжены. movu = movdqu, «move double quad unaligned» — про «unaligned» (выравнивание) расскажет урок 2." },
+    { t: "" },
+    { t: "    paddb m0, m1",
+      e: "<b>Сложение — сердце функции.</b> p-add-b: «p» = packed (векторная инструкция, не скалярная), «b» = bytes. 16 сложений одной инструкцией — в части 1 ты видел это в движении. m0 = m0 + m1 поэлементно." },
+    { t: "" },
+    { t: "    movu  [srcq], m0",
+      e: "<b>STORE.</b> Операнды поменялись местами: скобки теперь слева → пишем в память. 16 байт результата из m0 → по адресу srcq, прямо поверх исходных данных src." },
+    { t: "" },
+    { t: "    RET",
+      e: "<b>Возврат.</b> Макрос из x86inc (не голая инструкция ret — макрос ещё и приберётся за собой, если надо). Заметь: функция ничего не возвращает. Результат уже лежит в памяти по указателю src — стиль почти всех asm-функций FFmpeg: меняем данные по адресу, а не возвращаем значение." }
+  ];
+  var CHIPS = [
+    { t: "cglobal", l: "макрос", e: "<b>cglobal</b> — макрос из x86inc: объявляет функцию, видимую из C-кода. Разруливает за тебя всю рутину вызова (где лежат аргументы на разных ОС — Linux, Windows, macOS передают их по-разному; тебя это больше не касается)." },
+    { t: "add_values", l: "имя", e: "<b>add_values</b> — имя функции. Из C вызывается как обычно: add_values(src, src2)." },
+    { t: "2", l: "аргументы", e: "<b>Первая двойка: аргументов = 2.</b> Столько параметров у функции (src и src2). x86inc сам достанет их — из регистров или со стека, смотря по ОС — и положит в r0, r1." },
+    { t: "2", l: "GPR", e: "<b>Вторая двойка: GPR = 2.</b> Сколько всего регистров общего назначения нужно функции, включая аргументы. Понадобился бы счётчик цикла, как r1q в части 1, — написал бы 3." },
+    { t: "2", l: "XMM", e: "<b>Третья двойка: XMM = 2.</b> Сколько векторных регистров используем — m0 и m1. x86inc должен знать заранее (на Windows часть xmm-регистров надо сохранять — он сделает это за тебя)." },
+    { t: "src, src2", l: "имена арг.", e: "<b>Имена аргументов.</b> Из них рождаются srcq и src2q, которые ты видишь ниже в коде. Читается в сто раз лучше безликих r0q/r1q. В старом коде FFmpeg имён нет — там обращаются напрямую r0, r1." }
+  ];
+
+  var code = $("f_code");
+  LINES.forEach(function (l, i) {
+    var s = document.createElement("span");
+    s.className = "ln" + (l.e ? " clickable" : "");
+    s.id = "f_ln" + i;
+    s.textContent = l.t === "" ? " " : l.t;
+    if (l.e) {
+      s.setAttribute("tabindex", "0");
+      s.setAttribute("role", "button");
+      var pick = function (idx) { return function (ev) {
+        if (ev.type === "keydown" && ev.key !== "Enter" && ev.key !== " ") return;
+        ev.preventDefault(); select(idx);
+      }; }(i);
+      s.addEventListener("click", pick);
+      s.addEventListener("keydown", pick);
+    }
+    code.appendChild(s);
+  });
+
+  var chipsEl = $("f_chips");
+  CHIPS.forEach(function (c, i) {
+    var b = document.createElement("button");
+    b.className = "chip"; b.id = "f_chip" + i;
+    b.innerHTML = c.t + "<small>" + c.l + "</small>";
+    b.addEventListener("click", function () { selectChip(i); });
+    chipsEl.appendChild(b);
+  });
+
+  function select(i) {
+    LINES.forEach(function (l, j) {
+      var el = $("f_ln" + j);
+      el.className = "ln" + (l.e ? " clickable" : "") + (j === i ? " sel" : "");
+    });
+    chipsEl.hidden = !LINES[i].chips;
+    CHIPS.forEach(function (c, j) { $("f_chip" + j).className = "chip"; });
+    $("f_expl").innerHTML = LINES[i].e;
+  }
+  function selectChip(i) {
+    CHIPS.forEach(function (c, j) { $("f_chip" + j).className = "chip" + (j === i ? " sel" : ""); });
+    $("f_expl").innerHTML = CHIPS[i].e;
+  }
+  select(0);
+})();
+</script>

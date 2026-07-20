@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Урок 1.2 — Скалярный asm: одна инструкция, одно значение</title>
+<link rel="stylesheet" href="../assets/viz.css">
+
+<div class="wrap">
+  <nav class="topnav">
+    <a href="../">← Все уроки</a>
+    <span>Урок 1 · часть 2 из 3</span>
+    <span class="lang"><b>RU</b> · <a href="viz-2-scalar.en.html">EN</a></span>
+  </nav>
+  <div>
+    <h1>Скалярный asm: одна инструкция, одно значение</h1>
+    <p class="sub">Тот самый «искусственный» фрагмент из урока. Один GPR, никаких векторов. Смотри, как значение меняется.</p>
+  </div>
+
+  <div class="panel">
+    <div class="scalar">
+      <div>
+        <div class="biggpr">
+          <div class="rname">r0q</div>
+          <div class="rval" id="s_rval">?</div>
+        </div>
+        <div class="hint">Порядок Intel: <code>mov r0q, 3</code> читай как «r0q = 3».<br>Приёмник слева ← источник справа, как memcpy(dst, src).</div>
+      </div>
+      <div>
+        <pre class="code" id="s_code"></pre>
+        <div class="narr" id="s_narr" style="margin-top:12px"></div>
+        <div class="controls" style="margin-top:12px">
+          <button class="primary" id="s_step">Шаг →</button>
+          <button id="s_back">← Назад</button>
+          <button id="s_reset">Сброс</button>
+          <span class="stepno" id="s_stepno"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <nav class="pagenav">
+    <a href="viz-1-brighten.ru.html">← Часть 1 — цикл brighten</a>
+    <a href="viz-3-add-values.ru.html">Часть 3 — add_values →</a>
+  </nav>
+</div>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var LINES = ["mov  r0q, 3", "inc  r0q", "dec  r0q", "imul r0q, 5"];
+  var STEPS = [
+    { line: -1, val: "?", desc: "<b>Старт.</b> В r0q — мусор (что осталось от прошлой работы). Регистр никогда не бывает «пустым», в нём всегда какие-то биты." },
+    { line: 0, val: "3", desc: "<b>mov.</b> Тройка — <b>immediate</b>-значение: зашита прямо в код инструкции, из памяти ничего не читали. r0q = 3. Суффикс «q» = работаем с регистром как с qword (64 бита)." },
+    { line: 1, val: "4", desc: "<b>inc</b> = increment: r0q += 1 → 4. Один операнд — он и источник, и приёмник." },
+    { line: 2, val: "3", desc: "<b>dec</b> = decrement: r0q −= 1 → обратно 3." },
+    { line: 3, val: "15", desc: "<b>imul</b> = integer multiply: r0q ×= 5 → <b>15</b>. Итог: четыре инструкции, все операции — внутри одного регистра, память не тронута ни разу. Это и есть скалярный код: одно значение за раз." }
+  ];
+  var code = $("s_code");
+  LINES.forEach(function (t, i) {
+    var s = document.createElement("span");
+    s.className = "ln"; s.id = "s_ln" + i; s.textContent = t;
+    code.appendChild(s);
+  });
+  var cur = 0;
+  function render() {
+    var st = STEPS[cur];
+    var rv = $("s_rval");
+    rv.textContent = st.val;
+    rv.className = "rval" + (cur > 0 ? " flash" : "");
+    setTimeout(function () { rv.className = "rval"; }, 300);
+    for (var i = 0; i < LINES.length; i++)
+      $("s_ln" + i).className = "ln" + (st.line === i ? " hl" : "");
+    $("s_narr").innerHTML = st.desc;
+    $("s_stepno").textContent = "шаг " + cur + " / " + (STEPS.length - 1);
+    $("s_step").disabled = cur === STEPS.length - 1;
+    $("s_back").disabled = cur === 0;
+  }
+  $("s_step").addEventListener("click", function () { if (cur < STEPS.length - 1) { cur++; render(); } });
+  $("s_back").addEventListener("click", function () { if (cur > 0) { cur--; render(); } });
+  $("s_reset").addEventListener("click", function () { cur = 0; render(); });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "ArrowRight" || e.key === " ") { e.preventDefault(); if (cur < STEPS.length - 1) { cur++; render(); } }
+    if (e.key === "ArrowLeft") { e.preventDefault(); if (cur > 0) { cur--; render(); } }
+  });
+  render();
+})();
+</script>

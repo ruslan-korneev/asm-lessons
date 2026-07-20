@@ -1,0 +1,276 @@
+/* Общая дизайн-система визуализаций asm-lessons.
+   Токены: янтарный = GPR/указатели, циан = векторные данные/index,
+   зелёный = константы/записано, фиолетовый = вычисленный адрес/результат. */
+
+:root {
+  --bg: #0e1116;
+  --panel: #151b23;
+  --panel-edge: #232b36;
+  --text: #d9dee6;
+  --muted: #8a93a0;
+  --gpr: #e8a33d;
+  --vec: #4fc3e8;
+  --ok:  #6bcb77;
+  --tgt: #b18cf0;
+  --bad: #e06a6a;
+  --cell-bg: #1b232e;
+  --code-hl: #24303f;
+  --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f3f4f2; --panel: #ffffff; --panel-edge: #d8dcd6;
+    --text: #22272e; --muted: #6b7280;
+    --gpr: #b06f10; --vec: #0d7fa8; --ok: #2e8b46; --tgt: #7a4fd0; --bad: #c04545;
+    --cell-bg: #eef0ed; --code-hl: #e4e9ef;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1116; --panel: #151b23; --panel-edge: #232b36;
+  --text: #d9dee6; --muted: #8a93a0;
+  --gpr: #e8a33d; --vec: #4fc3e8; --ok: #6bcb77; --tgt: #b18cf0; --bad: #e06a6a;
+  --cell-bg: #1b232e; --code-hl: #24303f;
+}
+:root[data-theme="light"] {
+  --bg: #f3f4f2; --panel: #ffffff; --panel-edge: #d8dcd6;
+  --text: #22272e; --muted: #6b7280;
+  --gpr: #b06f10; --vec: #0d7fa8; --ok: #2e8b46; --tgt: #7a4fd0; --bad: #c04545;
+  --cell-bg: #eef0ed; --code-hl: #e4e9ef;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--text);
+  font: 15px/1.55 -apple-system, "Segoe UI", Roboto, sans-serif;
+  margin: 0; padding: 24px 16px 64px;
+}
+.wrap { max-width: 920px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+
+/* ── навигация ── */
+.topnav { display: flex; gap: 14px; align-items: baseline; font-size: 13.5px; flex-wrap: wrap; }
+.topnav a { color: var(--muted); text-decoration: none; border-bottom: 1px dotted var(--muted); }
+.topnav a:hover { color: var(--text); }
+.topnav .lang { margin-left: auto; color: var(--muted); }
+.topnav .lang b { color: var(--text); }
+.pagenav { display: flex; justify-content: space-between; gap: 14px; font-size: 13.5px; margin-top: 6px; }
+.pagenav a { color: var(--gpr); text-decoration: none; }
+.pagenav a:hover { text-decoration: underline; }
+.pagenav .off { color: var(--muted); }
+
+h1 { font-size: 20px; margin: 0; font-weight: 650; text-wrap: balance; }
+h1 code { font-family: var(--mono); color: var(--vec); font-size: 18px; }
+.sub { color: var(--muted); margin: 2px 0 6px; font-size: 14px; }
+.parthead { font-size: 17px; font-weight: 650; margin: 18px 0 0; }
+.parthead small { display: block; font-weight: 400; font-size: 13.5px; color: var(--muted); margin-top: 2px; }
+
+.panel {
+  background: var(--panel); border: 1px solid var(--panel-edge);
+  border-radius: 10px; padding: 14px 16px;
+}
+.label {
+  font-size: 11px; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 10px; font-weight: 600;
+}
+.label b { color: var(--text); font-weight: 600; }
+
+/* ── код ── */
+.codegrid { display: flex; flex-direction: column; gap: 14px; }
+pre.code { font-family: var(--mono); font-size: 13.5px; line-height: 1.7; margin: 0; overflow-x: auto; }
+pre.code .ln { display: block; padding: 0 10px; border-radius: 5px; white-space: pre; }
+pre.code .ln.hl { background: var(--code-hl); outline: 1px solid var(--panel-edge); }
+pre.code .cm { color: var(--muted); }
+pre.code .kw { color: var(--vec); }
+pre.code .ln.clickable { cursor: pointer; }
+pre.code .ln.clickable:hover { background: var(--code-hl); }
+pre.code .ln.sel { background: var(--code-hl); outline: 1px solid var(--gpr); }
+
+.narr {
+  border-left: 3px solid var(--gpr); padding: 8px 12px; border-radius: 0 6px 6px 0;
+  background: var(--cell-bg); min-height: 3.2em; font-size: 14.5px;
+}
+.narr b { color: var(--gpr); }
+.narr .t { color: var(--tgt); font-weight: 600; }
+.narr .v { color: var(--vec); font-weight: 600; }
+.narr .k { color: var(--ok); font-weight: 600; }
+.narr .x { color: var(--bad); font-weight: 600; }
+.narr code { font-family: var(--mono); font-size: 13px; }
+
+.controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+button {
+  font: 600 14px/1 -apple-system, "Segoe UI", sans-serif;
+  padding: 10px 22px; border-radius: 7px; cursor: pointer;
+  border: 1px solid var(--panel-edge); background: var(--cell-bg); color: var(--text);
+}
+button.primary { background: var(--gpr); border-color: var(--gpr); color: #14100a; }
+button:focus-visible { outline: 2px solid var(--vec); outline-offset: 2px; }
+button:disabled { opacity: .45; cursor: default; }
+.stepno { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-left: auto; }
+
+/* ── память ── */
+.memscroll { overflow-x: auto; padding-bottom: 4px; }
+.memrow { display: grid; grid-template-columns: 64px repeat(16, minmax(30px, 1fr)); gap: 4px; margin-bottom: 4px; min-width: 620px; }
+.addr { font-family: var(--mono); font-size: 11px; color: var(--muted); align-self: center; text-align: right; padding-right: 6px; }
+.cell {
+  font-family: var(--mono); font-size: 12px; text-align: center;
+  background: var(--cell-bg); border: 1px solid var(--panel-edge);
+  border-radius: 5px; padding: 5px 0;
+  transition: background .25s, border-color .25s, color .25s, opacity .25s;
+}
+.cell.window { border-color: var(--gpr); }
+.cell.reading { border-color: var(--vec); color: var(--vec); }
+.cell.written { background: color-mix(in srgb, var(--ok) 18%, var(--cell-bg)); border-color: var(--ok); color: var(--ok); }
+.cell.m0 { border-color: var(--vec); color: var(--vec); background: color-mix(in srgb, var(--vec) 12%, var(--cell-bg)); }
+.cell.m1 { border-color: var(--tgt); color: var(--tgt); background: color-mix(in srgb, var(--tgt) 14%, var(--cell-bg)); }
+.cell.m0.m1 { background: linear-gradient(135deg, color-mix(in srgb, var(--vec) 16%, var(--cell-bg)) 50%, color-mix(in srgb, var(--tgt) 18%, var(--cell-bg)) 50%); }
+.cell.past { opacity: .38; }
+.memquiet .cell { color: var(--muted); }
+.ptrrow { display: grid; grid-template-columns: 64px repeat(16, minmax(30px, 1fr)); gap: 4px; min-width: 620px; height: 20px; margin-bottom: 2px; }
+.ptr { grid-row: 1; font-family: var(--mono); font-size: 11px; color: var(--gpr); text-align: center; white-space: nowrap; }
+.ptr.psrc { color: var(--gpr); font-weight: 700; }
+.ptr.pm1 { color: var(--tgt); font-weight: 700; }
+
+/* ── регистры ── */
+.cpu { display: grid; grid-template-columns: 240px 1fr; gap: 20px; }
+@media (max-width: 680px) { .cpu { grid-template-columns: 1fr; } }
+.gpr-box { display: flex; flex-direction: column; gap: 8px; }
+.gpr {
+  display: flex; justify-content: space-between; align-items: center;
+  font-family: var(--mono); background: var(--cell-bg);
+  border: 1px solid var(--panel-edge); border-radius: 6px; padding: 8px 12px;
+  transition: border-color .25s;
+}
+.gpr.active { border-color: var(--gpr); }
+.gpr .rname { color: var(--gpr); font-weight: 700; }
+.gpr .rval { font-size: 17px; font-variant-numeric: tabular-nums; }
+.gpr .rrole { font-size: 11px; color: var(--muted); font-family: -apple-system, "Segoe UI", sans-serif; }
+
+.vecs { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.vreg { min-width: 0; }
+.vname { font-family: var(--mono); font-size: 12px; color: var(--vec); font-weight: 700; margin-bottom: 4px; }
+.vname span { color: var(--muted); font-weight: 400; }
+.vcells-scroll { overflow-x: auto; }
+.vcells { display: grid; grid-template-columns: repeat(16, minmax(26px, 1fr)); gap: 3px; min-width: 500px; }
+.vcells.w8 { grid-template-columns: repeat(8, minmax(52px, 1fr)); }
+.vcell {
+  font-family: var(--mono); font-size: 11px; text-align: center;
+  background: var(--cell-bg); border: 1px solid var(--panel-edge);
+  border-radius: 4px; padding: 4px 0; color: var(--muted);
+  transition: background .25s, border-color .25s, color .25s;
+}
+.vreg.active .vcell { border-color: var(--vec); color: var(--vec); }
+.vreg.result .vcell { border-color: var(--ok); color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, var(--cell-bg)); }
+.vcell.lo { border-color: var(--vec); color: var(--vec); }
+.vcell.hi { border-color: var(--tgt); color: var(--tgt); }
+.vcell.zero { border-color: var(--ok); color: var(--ok); }
+.vcell.neg { border-color: var(--bad); color: var(--bad); }
+.vcell.pick { outline: 2px solid var(--gpr); outline-offset: 1px; }
+
+/* ── строки-регистры (компактные) ── */
+.vregline {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  background: var(--cell-bg); border: 1px solid var(--panel-edge); border-radius: 6px;
+  padding: 10px 12px; font-family: var(--mono); transition: border-color .25s;
+}
+.vregline .vn { font-weight: 700; }
+.vregline .vs { font-size: 13px; color: var(--muted); }
+.vregline.vm0 .vn { color: var(--vec); }
+.vregline.vm1 .vn { color: var(--tgt); }
+.vregline.vm0.loaded { border-color: var(--vec); }
+.vregline.vm1.loaded { border-color: var(--tgt); }
+
+/* ── флаги ── */
+.flags {
+  display: flex; gap: 8px; align-items: center; font-family: var(--mono); font-size: 13px;
+  background: var(--cell-bg); border: 1px dashed var(--panel-edge); border-radius: 6px;
+  padding: 8px 12px; color: var(--muted); flex-wrap: wrap;
+}
+.flags .fv { color: var(--text); font-weight: 700; }
+.flags .verdict { margin-left: auto; font-weight: 700; }
+.flags .verdict.yes { color: var(--ok); }
+.flags .verdict.no { color: var(--muted); }
+.flags.touched { border-color: var(--gpr); }
+
+/* ── калькулятор (формула адреса / lea) ── */
+.calc { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-family: var(--mono); font-size: 15px; }
+.calc .op { color: var(--muted); }
+.cchip {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  background: var(--cell-bg); border: 1px solid var(--panel-edge);
+  border-radius: 7px; padding: 7px 12px; min-width: 74px;
+  transition: border-color .25s, box-shadow .25s;
+}
+.cchip small {
+  font-family: -apple-system, "Segoe UI", sans-serif; font-size: 10px;
+  letter-spacing: .07em; text-transform: uppercase; color: var(--muted);
+}
+.cchip .cv { font-size: 17px; font-variant-numeric: tabular-nums; }
+.cchip.cb { border-color: var(--gpr); } .cchip.cb .cv { color: var(--gpr); }
+.cchip.ci { border-color: var(--vec); } .cchip.ci .cv { color: var(--vec); }
+.cchip.cd { border-color: var(--ok); }  .cchip.cd .cv { color: var(--ok); }
+.cchip.ct { border-color: var(--tgt); } .cchip.ct .cv { color: var(--tgt); font-weight: 700; }
+.calc.live .cchip.ct { box-shadow: 0 0 0 3px color-mix(in srgb, var(--tgt) 30%, transparent); }
+.calc.idle { opacity: .45; }
+.calcnote { font-size: 12.5px; color: var(--muted); margin-top: 8px; }
+.calcnote code { font-family: var(--mono); color: var(--ok); }
+
+/* ── формула-шапка ── */
+.formula {
+  font-family: var(--mono); font-size: 18px; text-align: center;
+  display: flex; gap: .35em; justify-content: center; flex-wrap: wrap; align-items: baseline;
+}
+.formula .fb { color: var(--gpr); }
+.formula .fi { color: var(--vec); }
+.formula .fd { color: var(--ok); }
+.fkey { display: flex; gap: 18px; justify-content: center; flex-wrap: wrap; margin-top: 8px; font-size: 12.5px; color: var(--muted); }
+.fkey b { font-family: var(--mono); font-weight: 600; }
+.fkey .fb { color: var(--gpr); } .fkey .fi { color: var(--vec); } .fkey .fd { color: var(--ok); }
+
+/* ── скалярный степпер ── */
+.scalar { display: grid; grid-template-columns: 200px 1fr; gap: 20px; align-items: start; }
+@media (max-width: 640px) { .scalar { grid-template-columns: 1fr; } }
+.biggpr {
+  background: var(--cell-bg); border: 1px solid var(--gpr); border-radius: 8px;
+  padding: 14px; text-align: center;
+}
+.biggpr .rname { font-family: var(--mono); color: var(--gpr); font-weight: 700; font-size: 14px; }
+.biggpr .rval { font-family: var(--mono); font-size: 42px; line-height: 1.2; transition: color .25s; }
+.biggpr .rval.flash { color: var(--ok); }
+.hint {
+  font-size: 13px; color: var(--muted); background: var(--cell-bg);
+  border: 1px dashed var(--panel-edge); border-radius: 6px; padding: 8px 12px; margin-top: 10px;
+}
+.hint code { font-family: var(--mono); color: var(--vec); }
+
+/* ── чипы-токены ── */
+.chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 10px; }
+.chip {
+  font-family: var(--mono); font-size: 13px; padding: 6px 10px; border-radius: 6px;
+  background: var(--cell-bg); border: 1px solid var(--panel-edge); cursor: pointer;
+  color: var(--text);
+}
+.chip:hover { border-color: var(--gpr); }
+.chip.sel { border-color: var(--gpr); background: color-mix(in srgb, var(--gpr) 16%, var(--cell-bg)); }
+.chip small { display: block; font-family: -apple-system, "Segoe UI", sans-serif; font-size: 10px; color: var(--muted); letter-spacing: .05em; text-transform: uppercase; }
+
+/* ── вкладки ── */
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.tabs button { padding: 8px 16px; font-size: 13.5px; }
+.tabs button.on { background: var(--gpr); border-color: var(--gpr); color: #14100a; }
+
+/* ── таблица мнемоник ── */
+table.mnem { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+table.mnem th, table.mnem td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--panel-edge); }
+table.mnem th { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+table.mnem td:first-child { font-family: var(--mono); color: var(--gpr); font-weight: 600; white-space: nowrap; }
+table.mnem td:last-child { font-family: var(--mono); color: var(--muted); white-space: nowrap; }
+table.mnem tr.clickable { cursor: pointer; }
+table.mnem tr.clickable:hover td { background: var(--code-hl); }
+table.mnem tr.sel td { background: var(--code-hl); }
+.tablescroll { overflow-x: auto; }
+
+.legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cell, .gpr, .vreg, .vcell, .cchip, .vregline, .biggpr .rval { transition: none; }
+}

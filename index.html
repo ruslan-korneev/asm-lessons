@@ -37,7 +37,6 @@
 
   header { display: flex; align-items: flex-start; gap: 16px; }
   h1 { font-size: 24px; margin: 0; font-weight: 650; text-wrap: balance; }
-  h1 code { font-family: var(--mono); color: var(--vec); font-size: 22px; }
   .sub { color: var(--muted); margin: 6px 0 0; font-size: 14.5px; max-width: 52ch; }
   .sub a { color: var(--vec); text-decoration: none; }
   .sub a:hover { text-decoration: underline; }
@@ -54,39 +53,34 @@
   .card {
     background: var(--panel); border: 1px solid var(--panel-edge);
     border-radius: 12px; padding: 18px 20px;
-    display: flex; align-items: center; gap: 18px;
   }
-  @media (max-width: 560px) { .card { flex-wrap: wrap; } }
+  .lessonhead { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
   .lessonno {
-    font-family: var(--mono); font-size: 13px; font-weight: 700;
-    color: var(--muted); letter-spacing: .08em; text-transform: uppercase;
-    writing-mode: initial; flex-shrink: 0; width: 74px;
+    font-family: var(--mono); font-size: 12px; font-weight: 700;
+    color: var(--gpr); letter-spacing: .08em; text-transform: uppercase;
   }
-  .card.available .lessonno { color: var(--gpr); }
-  .cardbody { min-width: 0; flex: 1; }
-  .cardtitle { font-weight: 650; font-size: 16.5px; }
-  .cardtitle code { font-family: var(--mono); font-size: 15px; color: var(--vec); }
-  .carddesc { color: var(--muted); font-size: 13.5px; margin-top: 3px; }
-  .cardlinks { display: flex; gap: 8px; flex-shrink: 0; }
-  .cardlinks a {
-    font: 600 14px/1 -apple-system, "Segoe UI", sans-serif;
-    padding: 10px 18px; border-radius: 7px; text-decoration: none;
-    border: 1px solid var(--panel-edge); background: var(--cell-bg); color: var(--text);
-  }
-  .card.available .cardlinks a { border-color: var(--gpr); color: var(--gpr); }
-  .cardlinks a:hover { background: var(--gpr); color: #14100a; }
-  .card.soon { opacity: .55; }
-  .card.soon .cardlinks span {
-    font-size: 13px; color: var(--muted); padding: 10px 4px; font-style: italic;
-  }
-  .textlink { font-size: 12.5px; margin-top: 6px; }
+  .lessontitle { font-weight: 650; font-size: 16.5px; }
+  .textlink { margin-left: auto; font-size: 12.5px; }
   .textlink a { color: var(--muted); text-decoration: none; border-bottom: 1px dotted var(--muted); }
   .textlink a:hover { color: var(--text); }
+
+  .parts { display: flex; flex-direction: column; }
+  .part {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 12px; border-radius: 8px; text-decoration: none; color: inherit;
+    border: 1px solid transparent;
+  }
+  .part:hover { background: var(--cell-bg); border-color: var(--panel-edge); }
+  .partno { font-family: var(--mono); font-size: 12px; color: var(--muted); width: 26px; flex-shrink: 0; }
+  .partname { font-size: 14.5px; }
+  .partname code { font-family: var(--mono); font-size: 13.5px; color: var(--vec); }
+  .partdesc { color: var(--muted); font-size: 12.5px; margin-left: auto; text-align: right; }
+  @media (max-width: 560px) { .partdesc { display: none; } }
+  .part .go { color: var(--gpr); font-weight: 600; flex-shrink: 0; }
 
   footer { color: var(--muted); font-size: 12.5px; text-align: center; margin-top: 12px; }
   footer a { color: var(--muted); }
 
-  /* language switching */
   [data-lang="ru"] .en { display: none; }
   [data-lang="en"] .ru { display: none; }
 </style>
@@ -98,8 +92,8 @@
       <h1>FFmpeg Assembly<br>
         <span class="ru">интерактивные визуализации</span><span class="en">interactive visualizations</span>
       </h1>
-      <p class="sub ru">Пошаговые визуализации к <a href="https://github.com/FFmpeg/asm-lessons">урокам ассемблера FFmpeg</a>: память, регистры и код в движении. Жми «Шаг» и смотри, что куда течёт.</p>
-      <p class="sub en">Step-by-step visualizations for the <a href="https://github.com/FFmpeg/asm-lessons">FFmpeg assembly lessons</a>: memory, registers and code in motion. Hit "Step" and watch what flows where.</p>
+      <p class="sub ru">Пошаговые визуализации к <a href="https://github.com/FFmpeg/asm-lessons">урокам ассемблера FFmpeg</a>: память, регистры и код в движении. Каждая тема урока — отдельная страница.</p>
+      <p class="sub en">Step-by-step visualizations for the <a href="https://github.com/FFmpeg/asm-lessons">FFmpeg assembly lessons</a>: memory, registers and code in motion. Each topic gets its own page.</p>
     </div>
     <div class="langsw" role="group" aria-label="Language">
       <button id="swRu" class="on" onclick="setLang('ru')">RU</button>
@@ -107,48 +101,61 @@
     </div>
   </header>
 
-  <div class="card available">
-    <span class="lessonno"><span class="ru">Урок 1</span><span class="en">Lesson 1</span></span>
-    <div class="cardbody">
-      <div class="cardtitle"><span class="ru">Регистры в деле: цикл</span><span class="en">Registers in action: the</span> <code>brighten</code> <span class="en">loop</span></div>
-      <div class="carddesc ru">GPR против векторных регистров · скалярный степпер · разбор add_values по строкам</div>
-      <div class="carddesc en">GPRs vs vector registers · scalar stepper · add_values line-by-line walkthrough</div>
-      <div class="textlink">
+  <div class="card">
+    <div class="lessonhead">
+      <span class="lessonno"><span class="ru">Урок 1</span><span class="en">Lesson 1</span></span>
+      <span class="lessontitle"><span class="ru">Регистры и первая SIMD-функция</span><span class="en">Registers and the first SIMD function</span></span>
+      <span class="textlink">
         <span class="ru"><a href="https://github.com/ruslan-korneev/asm-lessons/blob/main/lesson_01/index.ru.md">текст урока →</a></span>
         <span class="en"><a href="https://github.com/ruslan-korneev/asm-lessons/blob/main/lesson_01/index.md">lesson text →</a></span>
-      </div>
+      </span>
     </div>
-    <div class="cardlinks">
-      <a class="ru" href="lesson_01/viz.ru.html">Открыть</a>
-      <a class="en" href="lesson_01/viz.en.html">Open</a>
+    <div class="parts">
+      <a class="part ru" href="lesson_01/viz-1-brighten.ru.html"><span class="partno">1.1</span><span class="partname">Цикл <code>brighten</code>: GPR против векторов</span><span class="partdesc">память · регистры · 16 байт разом</span><span class="go">→</span></a>
+      <a class="part en" href="lesson_01/viz-1-brighten.en.html"><span class="partno">1.1</span><span class="partname">The <code>brighten</code> loop: GPRs vs vectors</span><span class="partdesc">memory · registers · 16 bytes at once</span><span class="go">→</span></a>
+      <a class="part ru" href="lesson_01/viz-2-scalar.ru.html"><span class="partno">1.2</span><span class="partname">Скалярный asm: одна инструкция — одно значение</span><span class="partdesc">mov · inc · dec · imul</span><span class="go">→</span></a>
+      <a class="part en" href="lesson_01/viz-2-scalar.en.html"><span class="partno">1.2</span><span class="partname">Scalar asm: one instruction, one value</span><span class="partdesc">mov · inc · dec · imul</span><span class="go">→</span></a>
+      <a class="part ru" href="lesson_01/viz-3-add-values.ru.html"><span class="partno">1.3</span><span class="partname"><code>add_values</code> построчно</span><span class="partdesc">cglobal по токенам</span><span class="go">→</span></a>
+      <a class="part en" href="lesson_01/viz-3-add-values.en.html"><span class="partno">1.3</span><span class="partname"><code>add_values</code> line by line</span><span class="partdesc">cglobal token by token</span><span class="go">→</span></a>
     </div>
   </div>
 
-  <div class="card available">
-    <span class="lessonno"><span class="ru">Урок 2</span><span class="en">Lesson 2</span></span>
-    <div class="cardbody">
-      <div class="cardtitle"><span class="ru">Адресация:</span><span class="en">Addressing:</span> <code>[base + scale·index + disp]</code></div>
-      <div class="carddesc ru">формула адреса · калькулятор смещений · окна чтения m0 и m1 на ленте памяти</div>
-      <div class="carddesc en">the address formula · an offset calculator · m0 and m1 read windows on the memory tape</div>
-      <div class="textlink">
+  <div class="card">
+    <div class="lessonhead">
+      <span class="lessonno"><span class="ru">Урок 2</span><span class="en">Lesson 2</span></span>
+      <span class="lessontitle"><span class="ru">Ветвления, адресация и LEA</span><span class="en">Branching, addressing and LEA</span></span>
+      <span class="textlink">
         <span class="ru"><a href="https://github.com/ruslan-korneev/asm-lessons/blob/main/lesson_02/index.ru.md">текст урока →</a></span>
         <span class="en"><a href="https://github.com/ruslan-korneev/asm-lessons/blob/main/lesson_02/index.md">lesson text →</a></span>
-      </div>
+      </span>
     </div>
-    <div class="cardlinks">
-      <a class="ru" href="lesson_02/viz.ru.html">Открыть</a>
-      <a class="en" href="lesson_02/viz.en.html">Open</a>
+    <div class="parts">
+      <a class="part ru" href="lesson_02/viz-1-loops.ru.html"><span class="partno">2.1</span><span class="partname">Циклы и переходы: метки, FLAGS, jg/jl</span><span class="partdesc">dec+jg против cmp+jl · мнемоники</span><span class="go">→</span></a>
+      <a class="part en" href="lesson_02/viz-1-loops.en.html"><span class="partno">2.1</span><span class="partname">Loops and jumps: labels, FLAGS, jg/jl</span><span class="partdesc">dec+jg vs cmp+jl · mnemonics</span><span class="go">→</span></a>
+      <a class="part ru" href="lesson_02/viz-2-addressing.ru.html"><span class="partno">2.2</span><span class="partname">Адресация: <code>[base + scale·index + disp]</code></span><span class="partdesc">калькулятор адреса · окна чтения</span><span class="go">→</span></a>
+      <a class="part en" href="lesson_02/viz-2-addressing.en.html"><span class="partno">2.2</span><span class="partname">Addressing: <code>[base + scale·index + disp]</code></span><span class="partdesc">address calculator · read windows</span><span class="go">→</span></a>
+      <a class="part ru" href="lesson_02/viz-3-lea.ru.html"><span class="partno">2.3</span><span class="partname"><code>lea</code> — калькулятор в одной инструкции</span><span class="partdesc">против цепочки из 5 инструкций</span><span class="go">→</span></a>
+      <a class="part en" href="lesson_02/viz-3-lea.en.html"><span class="partno">2.3</span><span class="partname"><code>lea</code> — a calculator in one instruction</span><span class="partdesc">vs a 5-instruction chain</span><span class="go">→</span></a>
     </div>
   </div>
 
-  <div class="card soon">
-    <span class="lessonno"><span class="ru">Урок 3</span><span class="en">Lesson 3</span></span>
-    <div class="cardbody">
-      <div class="cardtitle"><span class="ru">Секции данных и ветвление</span><span class="en">Data sections and branching</span></div>
-      <div class="carddesc ru">визуализация в работе</div>
-      <div class="carddesc en">visualization in progress</div>
+  <div class="card">
+    <div class="lessonhead">
+      <span class="lessonno"><span class="ru">Урок 3</span><span class="en">Lesson 3</span></span>
+      <span class="lessontitle"><span class="ru">Трюки со смещениями, распаковка и pshufb</span><span class="en">Offset trickery, unpacking and pshufb</span></span>
+      <span class="textlink">
+        <span class="en"><a href="https://github.com/ruslan-korneev/asm-lessons/blob/main/lesson_03/index.md">lesson text →</a></span>
+        <span class="ru"><a href="https://github.com/ruslan-korneev/asm-lessons/blob/main/lesson_03/index.md">текст урока (en) →</a></span>
+      </span>
     </div>
-    <div class="cardlinks"><span class="ru">скоро</span><span class="en">soon</span></div>
+    <div class="parts">
+      <a class="part ru" href="lesson_03/viz-1-offset-trick.ru.html"><span class="partno">3.1</span><span class="partname">Pointer offset trickery: счётчик в минусе</span><span class="partdesc">указатель на конец · jl до нуля</span><span class="go">→</span></a>
+      <a class="part en" href="lesson_03/viz-1-offset-trick.en.html"><span class="partno">3.1</span><span class="partname">Pointer offset trickery: a negative counter</span><span class="partdesc">end pointer · jl toward zero</span><span class="go">→</span></a>
+      <a class="part ru" href="lesson_03/viz-2-unpack.ru.html"><span class="partno">3.2</span><span class="partname">Расширение диапазона: байты → слова</span><span class="partdesc">punpcklbw/hbw · zero/sign extension</span><span class="go">→</span></a>
+      <a class="part en" href="lesson_03/viz-2-unpack.en.html"><span class="partno">3.2</span><span class="partname">Range expansion: bytes → words</span><span class="partdesc">punpcklbw/hbw · zero/sign extension</span><span class="go">→</span></a>
+      <a class="part ru" href="lesson_03/viz-3-pshufb.ru.html"><span class="partno">3.3</span><span class="partname"><code>pshufb</code> — перестановка байтов по маске</span><span class="partdesc">главная инструкция видеообработки</span><span class="go">→</span></a>
+      <a class="part en" href="lesson_03/viz-3-pshufb.en.html"><span class="partno">3.3</span><span class="partname"><code>pshufb</code> — byte shuffle by mask</span><span class="partdesc">the key instruction of video processing</span><span class="go">→</span></a>
+    </div>
   </div>
 
   <footer>

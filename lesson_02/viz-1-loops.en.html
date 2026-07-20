@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 2.1 — Loops and branches: labels, FLAGS, jg/jl</title>
+<link rel="stylesheet" href="../assets/viz.css">
+<style>
+  .twocol { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 640px) { .twocol { grid-template-columns: 1fr; } }
+  .codehead { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; font-weight: 600; }
+</style>
+
+<div class="wrap">
+  <nav class="topnav">
+    <a href="../">← All lessons</a>
+    <span>Lesson 2 · part 1 of 3</span>
+    <span class="lang"><a href="viz-1-loops.ru.html">RU</a> · <b>EN</b></span>
+  </nav>
+  <div>
+    <h1>Loops and branches: labels, <code>FLAGS</code> and conditional jumps</h1>
+    <p class="sub">The same loop written two ways. Keep an eye on the flags register: every arithmetic instruction leaves a "fingerprint" in it, and a conditional jump reads it to decide — jump or not.</p>
+  </div>
+
+  <div class="panel codegrid">
+    <div class="tabs">
+      <button id="tabA" class="on">do-while: dec + jg</button>
+      <button id="tabB">for: xor + inc + cmp + jl</button>
+    </div>
+    <div class="scalar">
+      <div>
+        <div class="biggpr">
+          <div class="rname">r0q</div>
+          <div class="rval" id="rval">?</div>
+        </div>
+        <div class="flags" id="flags" style="margin-top:10px">
+          <span>FLAGS:</span><span id="flagtxt">untouched</span><span class="verdict" id="flagverdict"></span>
+        </div>
+      </div>
+      <div>
+        <div class="twocol">
+          <div>
+            <div class="codehead">assembly</div>
+            <pre class="code" id="asmcode"></pre>
+          </div>
+          <div>
+            <div class="codehead">C equivalent</div>
+            <pre class="code" id="ccode"></pre>
+          </div>
+        </div>
+        <div class="narr" id="narr" style="margin-top:12px"></div>
+        <div class="controls" style="margin-top:12px">
+          <button class="primary" id="btnStep">Step →</button>
+          <button id="btnBack">← Back</button>
+          <button id="btnReset">Reset</button>
+          <span class="stepno" id="stepno"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="label">Jump mnemonics — <b>click the rows</b></div>
+    <div class="tablescroll">
+      <table class="mnem" id="mnem">
+        <thead><tr><th>Mnemonic</th><th>Jump if…</th><th>FLAGS</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="narr" id="mnemexpl" style="margin-top:12px">Click a mnemonic — I'll explain when it fires and what it is usually paired with.</div>
+  </div>
+
+  <nav class="pagenav">
+    <a href="../lesson_01/viz-3-add-values.en.html">← Lesson 1, part 3 — add_values</a>
+    <a href="viz-2-addressing.en.html">Part 2 — addressing →</a>
+  </nav>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+
+  // ── the two loop variants ──────────────────────────────────────
+  const VARIANTS = {
+    A: {
+      asm: ['mov  r0q, 3', '.loop:', '    ; some work', '    dec  r0q', '    jg   .loop'],
+      c:   ['int i = 3;', 'do {', '    // some work', '    i--;', '} while (i > 0);'],
+      build() {
+        const S = [];
+        S.push({ a: -1, c: -1, r: '?', f: null,
+          narr: '<b>Start.</b> r0q holds garbage. Press "Step": assembly on the left, its C meaning on the right.' });
+        S.push({ a: 0, c: 0, r: 3, f: null,
+          narr: '<b>mov r0q, 3</b> — the counter is ready. Note: <b>mov does not touch the flags</b> — FLAGS is still in an undefined state.' });
+        let r = 3;
+        while (true) {
+          S.push({ a: 2, c: 2, r, f: null,
+            narr: `Iteration with r0q = ${r}. Useful work would go here. The label <code>.loop:</code> is not an instruction — merely a named spot in the code; the leading dot makes it local to the function.` });
+          r--;
+          S.push({ a: 3, c: 3, r, f: { zf: r === 0 ? 1 : 0, sf: 0 },
+            narr: `<b>dec r0q</b> → ${r}. Key point: dec <b>updated FLAGS</b> from the result — ZF=${r === 0 ? 1 : 0} (${r === 0 ? 'zero!' : 'nonzero'}), SF=0 (not negative). That comes for free — no separate check needed.` });
+          const taken = r > 0;
+          S.push({ a: 4, c: 4, r, f: { zf: r === 0 ? 1 : 0, sf: 0, verdict: taken },
+            narr: taken
+              ? `<b>jg .loop</b> — reads FLAGS: ZF=0 and SF=OF → "greater than zero" → <span class="k">jump</span> to the label.`
+              : `<b>jg .loop</b> — ZF=1 → "greater than zero" is false → <span class="x">no jump</span>, fall through. The loop ran exactly 3 iterations.` });
+          if (!taken) break;
+        }
+        S.push({ a: -1, c: -1, r: 0, f: null,
+          narr: '<b>Wrap-up.</b> 5 lines, none wasted: dec set the flags itself, jg read them. This is "do-while" style — the body runs at least once, the condition sits at the end. Asm loops are written exactly like this.' });
+        return S;
+      }
+    },
+    B: {
+      asm: ['xor  r0q, r0q', '.loop:', '    ; some work', '    inc  r0q', '    cmp  r0q, 3', '    jl   .loop'],
+      c:   ['int i;', 'for (i = 0;', '     i < 3;', '     i++) {', '    // some work', '}'],
+      build() {
+        const S = [];
+        S.push({ a: -1, c: -1, r: '?', f: null,
+          narr: '<b>Start.</b> Now try to mimic the familiar C-style for. Spoiler: it comes out one instruction longer.' });
+        S.push({ a: 0, c: 1, r: 0, f: { zf: 1, sf: 0 },
+          narr: '<b>xor r0q, r0q</b> — "a number XOR itself" is always 0. This is the zeroing idiom: faster than mov r0q, 0 — no value load happens. For SIMD the same job is done by <code>pxor m0, m0</code>. Bonus fact: xor sets flags too (ZF=1).' });
+        let r = 0;
+        while (true) {
+          S.push({ a: 2, c: 4, r, f: null,
+            narr: `Iteration with r0q = ${r}. Useful work.` });
+          r++;
+          S.push({ a: 3, c: 3, r, f: { zf: 0, sf: 0 },
+            narr: `<b>inc r0q</b> → ${r}. The flags got updated, but they are useless here: we need to compare against three, and inc knows nothing about it.` });
+          const diff = r - 3;
+          const taken = diff < 0;
+          S.push({ a: 4, c: 2, r, f: { zf: diff === 0 ? 1 : 0, sf: diff < 0 ? 1 : 0 },
+            narr: `<b>cmp r0q, 3</b> — computes r0q − 3 = ${diff}, <b>throws away</b> the result, keeps only FLAGS: ZF=${diff === 0 ? 1 : 0}, SF=${diff < 0 ? 1 : 0}. cmp is "subtraction for the sake of the flags".` });
+          S.push({ a: 5, c: 2, r, f: { zf: diff === 0 ? 1 : 0, sf: diff < 0 ? 1 : 0, verdict: taken },
+            narr: taken
+              ? `<b>jl .loop</b> — SF≠OF → "less than zero" → r0q &lt; 3 → <span class="k">jump</span>.`
+              : `<b>jl .loop</b> — the difference is zero, SF=OF → condition false → <span class="x">exit</span> after 3 iterations.` });
+          if (!taken) break;
+        }
+        S.push({ a: -1, c: -1, r: 3, f: null,
+          narr: '<b>Wrap-up.</b> Same loop, but 6 lines instead of 5: a separate cmp was needed. Fewer instructions = faster code → the dec+jg variant wins. We write loops not "like in C" but the way that is fastest in assembly.' });
+        return S;
+      }
+    }
+  };
+
+  let variant = 'A', STEPS = VARIANTS.A.build(), cur = 0;
+
+  function renderCode() {
+    const v = VARIANTS[variant];
+    const put = (el, lines, hlIdx) => {
+      el.innerHTML = '';
+      lines.forEach((t, i) => {
+        const s = document.createElement('span');
+        s.className = 'ln' + (t.trim().startsWith(';') || t.trim().startsWith('//') ? ' cm' : '') + (i === hlIdx ? ' hl' : '');
+        s.textContent = t || ' ';
+        el.appendChild(s);
+      });
+    };
+    const st = STEPS[cur];
+    put($('asmcode'), v.asm, st.a);
+    put($('ccode'), v.c, st.c);
+  }
+
+  function render() {
+    const st = STEPS[cur];
+    renderCode();
+    $('rval').textContent = st.r;
+    if (st.f) {
+      $('flagtxt').innerHTML = `ZF=<span class="fv">${st.f.zf}</span> SF=<span class="fv">${st.f.sf}</span>`;
+      $('flags').classList.add('touched');
+      const v = $('flagverdict');
+      if ('verdict' in st.f) {
+        v.textContent = st.f.verdict ? 'jump ✓' : 'exit ✕';
+        v.className = 'verdict ' + (st.f.verdict ? 'yes' : 'no');
+      } else v.textContent = '';
+    } else {
+      $('flagtxt').textContent = cur === 0 ? 'untouched' : 'unchanged';
+      $('flags').classList.remove('touched');
+      $('flagverdict').textContent = '';
+    }
+    $('narr').innerHTML = st.narr;
+    $('stepno').textContent = `step ${cur} / ${STEPS.length - 1}`;
+    $('btnStep').disabled = cur === STEPS.length - 1;
+    $('btnBack').disabled = cur === 0;
+  }
+
+  function setVariant(v) {
+    variant = v;
+    STEPS = VARIANTS[v].build();
+    cur = 0;
+    $('tabA').classList.toggle('on', v === 'A');
+    $('tabB').classList.toggle('on', v === 'B');
+    render();
+  }
+
+  $('tabA').addEventListener('click', () => setVariant('A'));
+  $('tabB').addEventListener('click', () => setVariant('B'));
+  $('btnStep').addEventListener('click', () => { if (cur < STEPS.length - 1) { cur++; render(); } });
+  $('btnBack').addEventListener('click', () => { if (cur > 0) { cur--; render(); } });
+  $('btnReset').addEventListener('click', () => { cur = 0; render(); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); if (cur < STEPS.length - 1) { cur++; render(); } }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); if (cur > 0) { cur--; render(); } }
+  });
+
+  render();
+
+  // ── mnemonics table ────────────────────────────────────────
+  const MNEM = [
+    ['JE / JZ', 'equal / zero', 'ZF = 1',
+     '<b>JE / JZ</b> — two names for one instruction. After <code>cmp a, b</code> equality means a−b = 0 → ZF=1. After arithmetic JZ reads more naturally: "is the result zero?"'],
+    ['JNE / JNZ', 'not equal / not zero', 'ZF = 0',
+     '<b>JNE / JNZ</b> — the mirror of the previous one: jumps while the values differ. The classic "until zero" loop: dec + jnz.'],
+    ['JG / JNLE', 'greater (signed)', 'ZF = 0 and SF = OF',
+     '<b>JG</b> — "jump if greater". Our variant A: dec set the flags, jg keeps jumping while the counter is &gt; 0. Signed comparison: −1 will not get through.'],
+    ['JGE / JNL', 'greater or equal (signed)', 'SF = OF',
+     '<b>JGE</b> — like JG, but jumps on equality too. Handy for conditions like "while i ≥ 0".'],
+    ['JL / JNGE', 'less (signed)', 'SF ≠ OF',
+     '<b>JL</b> — "jump if less". Our variant B: cmp r0q, 3 computed the difference, jl jumps while it is negative, i.e. while r0q &lt; 3. In lesson 3 this very jl drives a loop with a negative offset counter.'],
+    ['JLE / JNG', 'less or equal (signed)', 'ZF = 1 or SF ≠ OF',
+     '<b>JLE</b> — "less or equal": fires both on a negative difference and on zero.'],
+  ];
+  const tbody = document.querySelector('#mnem tbody');
+  MNEM.forEach((m, i) => {
+    const tr = document.createElement('tr');
+    tr.className = 'clickable';
+    tr.setAttribute('tabindex', '0');
+    tr.innerHTML = `<td>${m[0]}</td><td>${m[1]}</td><td>${m[2]}</td>`;
+    const pick = ev => {
+      if (ev.type === 'keydown' && ev.key !== 'Enter' && ev.key !== ' ') return;
+      ev.preventDefault();
+      tbody.querySelectorAll('tr').forEach(r => r.classList.remove('sel'));
+      tr.classList.add('sel');
+      $('mnemexpl').innerHTML = m[3];
+    };
+    tr.addEventListener('click', pick);
+    tr.addEventListener('keydown', pick);
+    tbody.appendChild(tr);
+  });
+})();
+</script>

@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Урок 2.3 — LEA: калькулятор в одной инструкции</title>
+<link rel="stylesheet" href="../assets/viz.css">
+<style>
+  .leainputs { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+  .leainputs label { font-size: 12.5px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .leainputs input, .leainputs select {
+    font: 600 15px/1.2 var(--mono); width: 72px; padding: 7px 8px;
+    background: var(--cell-bg); color: var(--text);
+    border: 1px solid var(--panel-edge); border-radius: 6px;
+  }
+  .leainputs select { width: auto; }
+  .leainputs input:focus-visible, .leainputs select:focus-visible { outline: 2px solid var(--vec); outline-offset: 1px; }
+  .leacode { font-family: var(--mono); font-size: 15px; margin-bottom: 12px; }
+  .leacode .fb { color: var(--gpr); } .leacode .fi { color: var(--vec); } .leacode .fd { color: var(--ok); }
+  .regsrow { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+</style>
+
+<div class="wrap">
+  <nav class="topnav">
+    <a href="../">← Все уроки</a>
+    <span>Урок 2 · часть 3 из 3</span>
+    <span class="lang"><b>RU</b> · <a href="viz-3-lea.en.html">EN</a></span>
+  </nav>
+  <div>
+    <h1><code>lea</code> — калькулятор в одной инструкции</h1>
+    <p class="sub">Load Effective Address: та же формула [base + scale·index + disp], но результат кладётся в регистр — <b>без похода в память</b>. Скобки есть, разыменования нет.</p>
+  </div>
+
+  <div class="panel">
+    <div class="label">Играй с операндами — <b>lea r0q, [r1q + scale·r2q + disp]</b></div>
+    <div class="leainputs">
+      <label>r1q <input type="number" id="inB" value="7"></label>
+      <label>scale
+        <select id="inS"><option>1</option><option>2</option><option>4</option><option selected>8</option></select>
+      </label>
+      <label>r2q <input type="number" id="inI" value="3"></label>
+      <label>disp <input type="number" id="inD" value="5"></label>
+    </div>
+    <div class="calc live">
+      <span class="op">[</span>
+      <div class="cchip cb"><small>base · r1q</small><span class="cv" id="cB">7</span></div>
+      <span class="op">+</span>
+      <div class="cchip ci"><small id="cSl">8 · r2q</small><span class="cv" id="cI">24</span></div>
+      <span class="op">+</span>
+      <div class="cchip cd"><small>disp</small><span class="cv" id="cD">5</span></div>
+      <span class="op">]</span>
+      <span class="op">→</span>
+      <div class="cchip ct"><small>r0q</small><span class="cv" id="cR">36</span></div>
+    </div>
+    <div class="calcnote">scale — только 1, 2, 4 или 8: это ограничение железа, а не ассемблера. r1q и r2q после lea <b>не меняются</b>, FLAGS <b>не трогаются</b>.</div>
+  </div>
+
+  <div class="panel codegrid">
+    <div class="label">То же самое без lea — <b>сравни две реализации</b></div>
+    <div class="tabs">
+      <button id="tabChain" class="on">цепочка из 5 инструкций</button>
+      <button id="tabLea">lea — одна инструкция</button>
+    </div>
+    <div class="regsrow">
+      <div class="gpr" id="g0"><span><span class="rname">r0q</span><br><span class="rrole">результат</span></span><span class="rval" id="v0">?</span></div>
+      <div class="gpr" id="g1"><span><span class="rname">r1q</span><br><span class="rrole">base</span></span><span class="rval" id="v1">7</span></div>
+      <div class="gpr" id="g2"><span><span class="rname">r2q</span><br><span class="rrole">index</span></span><span class="rval" id="v2">3</span></div>
+      <div class="gpr" id="g3"><span><span class="rname">r3q</span><br><span class="rrole">временный</span></span><span class="rval" id="v3">?</span></div>
+    </div>
+    <div class="flags" id="flags"><span>FLAGS:</span><span id="flagtxt">не тронуты</span></div>
+    <pre class="code" id="code"></pre>
+    <div class="narr" id="narr"></div>
+    <div class="controls">
+      <button class="primary" id="btnStep">Шаг →</button>
+      <button id="btnBack">← Назад</button>
+      <button id="btnReset">Сброс</button>
+      <span class="stepno" id="stepno"></span>
+    </div>
+  </div>
+
+  <nav class="pagenav">
+    <a href="viz-2-addressing.ru.html">← Часть 2 — адресация</a>
+    <a href="../lesson_03/viz-1-offset-trick.ru.html">Урок 3, часть 1 — трюк со смещением →</a>
+  </nav>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+
+  // ── живой калькулятор ───────────────────────────────────────
+  function recalc() {
+    const b = +$('inB').value || 0, s = +$('inS').value, i = +$('inI').value || 0, d = +$('inD').value || 0;
+    $('cB').textContent = b;
+    $('cSl').textContent = s + ' · r2q';
+    $('cI').textContent = `${s}·${i}=${s * i}`;
+    $('cD').textContent = d;
+    $('cR').textContent = b + s * i + d;
+  }
+  ['inB', 'inS', 'inI', 'inD'].forEach(id => $(id).addEventListener('input', recalc));
+  recalc();
+
+  // ── сравнение: цепочка vs lea ───────────────────────────────
+  const VARIANTS = {
+    chain: {
+      code: ['movq r0q, r1q', 'movq r3q, r2q', 'sal  r3q, 3   ; сдвиг влево на 3 = ×8', 'add  r3q, 5', 'add  r0q, r3q'],
+      steps: [
+        { l: -1, r0: '?', r3: '?', f: null, on: [],
+          narr: '<b>Задача:</b> r0q = r1q + 8·r2q + 5, где r1q=7, r2q=3. Без lea придётся строить вычисление вручную — и занять временный регистр r3q.' },
+        { l: 0, r0: 7, r3: '?', f: null, on: ['g0'],
+          narr: '<b>movq r0q, r1q</b> — копируем base в будущий результат. r0q = 7.' },
+        { l: 1, r0: 7, r3: 3, f: null, on: ['g3'],
+          narr: '<b>movq r3q, r2q</b> — копия index во временный r3q: сам r2q портить нельзя, он ещё может понадобиться.' },
+        { l: 2, r0: 7, r3: 24, f: 'ZF=0 SF=0 — затёрты sal', on: ['g3'],
+          narr: '<b>sal r3q, 3</b> — сдвиг влево на 3 бита = умножение на 8. r3q = 24. Флаги <span class="x">перезаписаны</span>.' },
+        { l: 3, r0: 7, r3: 29, f: 'ZF=0 SF=0 — затёрты add', on: ['g3'],
+          narr: '<b>add r3q, 5</b> — прибавили disp. r3q = 29. Флаги снова перезаписаны.' },
+        { l: 4, r0: 36, r3: 29, f: 'ZF=0 SF=0 — затёрты add', on: ['g0'],
+          narr: '<b>add r0q, r3q</b> — готово: r0q = 36. Итог: <b>5 инструкций</b>, занят лишний регистр, FLAGS затёрты — если до этого их выставил cmp, прыгать по ним уже нельзя.' },
+      ]
+    },
+    lea: {
+      code: ['lea r0q, [r1q + 8*r2q + 5]'],
+      steps: [
+        { l: -1, r0: '?', r3: '?', f: null, on: [],
+          narr: 'Та же задача: r0q = r1q + 8·r2q + 5. Теперь — блоком вычисления адресов.' },
+        { l: 0, r0: 36, r3: '?', f: null, on: ['g0'],
+          narr: '<b>lea r0q, [r1q + 8*r2q + 5]</b> → r0q = 7 + 24 + 5 = <b>36</b>. Одна инструкция. r1q и r2q не изменились, r3q не понадобился, FLAGS <span class="k">не тронуты</span> — но поэтому и прыгать по результату lea нельзя. И главное: скобки тут — просто синтаксис формулы, <b>в память никто не ходил</b>.' },
+      ]
+    }
+  };
+
+  let variant = 'chain', cur = 0;
+
+  function render() {
+    const v = VARIANTS[variant], st = v.steps[cur];
+    const codeEl = $('code');
+    codeEl.innerHTML = '';
+    v.code.forEach((t, i) => {
+      const s = document.createElement('span');
+      s.className = 'ln' + (i === st.l ? ' hl' : '');
+      s.textContent = t;
+      codeEl.appendChild(s);
+    });
+    $('v0').textContent = st.r0; $('v3').textContent = st.r3;
+    $('v1').textContent = 7; $('v2').textContent = 3;
+    ['g0', 'g1', 'g2', 'g3'].forEach(g => $(g).classList.toggle('active', st.on.includes(g)));
+    if (st.f) { $('flagtxt').textContent = st.f; $('flags').classList.add('touched'); }
+    else { $('flagtxt').textContent = 'не тронуты'; $('flags').classList.remove('touched'); }
+    $('narr').innerHTML = st.narr;
+    $('stepno').textContent = `шаг ${cur} / ${v.steps.length - 1}`;
+    $('btnStep').disabled = cur === v.steps.length - 1;
+    $('btnBack').disabled = cur === 0;
+  }
+
+  function setVariant(v) {
+    variant = v; cur = 0;
+    $('tabChain').classList.toggle('on', v === 'chain');
+    $('tabLea').classList.toggle('on', v === 'lea');
+    render();
+  }
+
+  $('tabChain').addEventListener('click', () => setVariant('chain'));
+  $('tabLea').addEventListener('click', () => setVariant('lea'));
+  $('btnStep').addEventListener('click', () => { if (cur < VARIANTS[variant].steps.length - 1) { cur++; render(); } });
+  $('btnBack').addEventListener('click', () => { if (cur > 0) { cur--; render(); } });
+  $('btnReset').addEventListener('click', () => { cur = 0; render(); });
+
+  render();
+})();
+</script>

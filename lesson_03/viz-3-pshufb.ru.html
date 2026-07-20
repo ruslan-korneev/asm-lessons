@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Урок 3.3 — pshufb: главная инструкция видеообработки</title>
+<link rel="stylesheet" href="../assets/viz.css">
+<style>
+  .shufrow { margin-top: 10px; }
+  .vcell.clickable { cursor: pointer; }
+  .vcell.clickable:hover { border-color: var(--gpr); }
+</style>
+
+<div class="wrap">
+  <nav class="topnav">
+    <a href="../">← Все уроки</a>
+    <span>Урок 3 · часть 3 из 3</span>
+    <span class="lang"><b>RU</b> · <a href="viz-3-pshufb.en.html">EN</a></span>
+  </nav>
+  <div>
+    <h1><code>pshufb</code> — перестановка байтов по маске</h1>
+    <p class="sub">Shuffle (permute) — по мнению урока, важнейшая инструкция видеообработки. Каждый байт маски — это индекс: «какой байт источника положить сюда». Жми «Шаг» или кликай по ячейкам результата.</p>
+  </div>
+
+  <div class="panel codegrid">
+    <div>
+      <div class="vreg" id="rsrc">
+        <div class="vname">m0 <span>— источник (до pshufb): байты-«буквы», чтобы было видно, кто куда переехал</span></div>
+        <div class="vcells-scroll"><div class="vcells" id="csrc"></div></div>
+      </div>
+      <div class="vreg shufrow" id="rmask">
+        <div class="vname">m1 <span>— маска: индексы источника, −1 = «обнулить»</span></div>
+        <div class="vcells-scroll"><div class="vcells" id="cmask"></div></div>
+      </div>
+      <div class="vreg shufrow" id="rdst">
+        <div class="vname">m0 <span>— результат (после pshufb) — кликай по ячейкам</span></div>
+        <div class="vcells-scroll"><div class="vcells" id="cdst"></div></div>
+      </div>
+    </div>
+    <pre class="code" id="code"></pre>
+    <div class="narr" id="narr">Слева направо: <b>pshufb m0, m1</b> идёт по всем 16 позициям результата разом — но мы разберём по одной. Нажми «Шаг».</div>
+    <div class="controls">
+      <button class="primary" id="btnStep">Шаг →</button>
+      <button id="btnAll">Всё сразу</button>
+      <button id="btnReset">Сброс</button>
+      <span class="stepno" id="stepno"></span>
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--vec)"></i>источник</span>
+      <span><i style="background:var(--ok)"></i>заполненный результат</span>
+      <span><i style="background:var(--bad)"></i>индекс −1 → байт обнуляется</span>
+      <span><i style="background:var(--gpr)"></i>текущая тройка «индекс → источник → результат»</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="label">То же самое на C — <b>только в SIMD все 16 итераций происходят параллельно</b></div>
+    <pre class="code">uint8_t tmp[16];
+memcpy(tmp, dst, 16);
+for (int i = 0; i &lt; 16; i++) {
+    if (src[i] &amp; 0x80)      /* старший бит индекса установлен (−1) */
+        dst[i] = 0;
+    else
+        dst[i] = tmp[src[i]];
+}</pre>
+  </div>
+
+  <nav class="pagenav">
+    <a href="viz-2-unpack.ru.html">← Часть 2 — расширение диапазона</a>
+    <span class="off"></span>
+  </nav>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const SRC = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P'];
+  const MASK = [4, 3, 1, 2, -1, 2, 3, 7, 5, 4, 3, 8, 12, 13, 15, -1];
+
+  const CODE = [
+    'SECTION_RODATA',
+    '',
+    'shuffle_mask: db 4, 3, 1, 2, -1, 2, 3, 7, 5, 4, 3, 8, 12, 13, 15, -1',
+    '',
+    'section .text',
+    '',
+    'movu   m0, [srcq]',
+    'movu   m1, [shuffle_mask]',
+    'pshufb m0, m1 ; перестановка m0 по маске m1',
+  ];
+
+  const codeEl = $('code');
+  CODE.forEach((t, i) => {
+    const s = document.createElement('span');
+    s.className = 'ln' + (i === 2 ? ' kw' : '') + (i === 8 ? ' hl' : '');
+    s.textContent = t || ' ';
+    codeEl.appendChild(s);
+  });
+
+  let filled = 0;      // сколько позиций результата уже заполнено
+  let inspect = -1;    // какая позиция разбирается в narr
+
+  const srcEls = [], maskEls = [], dstEls = [];
+  function build() {
+    SRC.forEach((ch, i) => {
+      const c = document.createElement('span');
+      c.className = 'vcell lo'; c.textContent = ch;
+      $('csrc').appendChild(c); srcEls.push(c);
+    });
+    MASK.forEach((m, i) => {
+      const c = document.createElement('span');
+      c.className = 'vcell' + (m < 0 ? ' neg' : '');
+      c.textContent = m;
+      $('cmask').appendChild(c); maskEls.push(c);
+    });
+    SRC.forEach((_, i) => {
+      const c = document.createElement('span');
+      c.className = 'vcell clickable'; c.textContent = '·';
+      c.setAttribute('tabindex', '0');
+      c.setAttribute('role', 'button');
+      const pick = ev => {
+        if (ev.type === 'keydown' && ev.key !== 'Enter' && ev.key !== ' ') return;
+        ev.preventDefault();
+        if (i < filled) { inspect = i; render(); }
+      };
+      c.addEventListener('click', pick);
+      c.addEventListener('keydown', pick);
+      $('cdst').appendChild(c); dstEls.push(c);
+    });
+  }
+  build();
+
+  function resultAt(i) { return MASK[i] < 0 ? '0' : SRC[MASK[i]]; }
+
+  function render() {
+    for (let i = 0; i < 16; i++) {
+      const d = dstEls[i];
+      d.className = 'vcell clickable';
+      if (i < filled) {
+        d.textContent = resultAt(i);
+        d.classList.add(MASK[i] < 0 ? 'neg' : 'zero');
+      } else d.textContent = '·';
+      maskEls[i].classList.remove('pick');
+      srcEls[i].classList.remove('pick');
+      d.classList.remove('pick');
+    }
+    if (inspect >= 0) {
+      const i = inspect, m = MASK[i];
+      dstEls[i].classList.add('pick');
+      maskEls[i].classList.add('pick');
+      if (m >= 0) srcEls[m].classList.add('pick');
+      $('narr').innerHTML = m < 0
+        ? `Позиция <b>${i}</b>: индекс в маске = <span class="x">−1</span>. Байт −1 — это 0b11111111, старший бит (0x80) установлен → правило pshufb: <b>обнулить</b>. dst[${i}] = 0. Удобный трюк: писать −1 вместо 0x80 — читается легче.`
+        : `Позиция <b>${i}</b>: маска говорит «возьми байт №${m}» → это <span class="v">${SRC[m]}</span>. dst[${i}] = src[${m}] = <b>${SRC[m]}</b>. Заметь: один и тот же байт источника можно брать сколько угодно раз — маска решает всё.`;
+    } else if (filled === 0) {
+      $('narr').innerHTML = 'Слева направо: <b>pshufb m0, m1</b> идёт по всем 16 позициям результата разом — но мы разберём по одной. Нажми «Шаг».';
+    } else if (filled === 16) {
+      $('narr').innerHTML = '<b>Готово.</b> 16 перестановок одной инструкцией: байты продублированы (D встречается трижды), переставлены, а две позиции обнулены масками −1. Ровно так в видеокоде тасуют цветовые каналы, разворачивают порядок байт и собирают пиксели из плоскостей. Кликай по ячейкам результата — покажу, откуда взялся каждый байт.';
+    }
+    $('stepno').textContent = `заполнено ${filled} / 16`;
+    $('btnStep').disabled = filled === 16;
+  }
+
+  $('btnStep').addEventListener('click', () => {
+    if (filled < 16) { inspect = filled; filled++; render(); }
+  });
+  $('btnAll').addEventListener('click', () => { filled = 16; inspect = -1; render(); });
+  $('btnReset').addEventListener('click', () => { filled = 0; inspect = -1; render(); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); if (filled < 16) { inspect = filled; filled++; render(); } }
+  });
+
+  render();
+})();
+</script>

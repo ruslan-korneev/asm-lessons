@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 2.3 — LEA: a calculator in one instruction</title>
+<link rel="stylesheet" href="../assets/viz.css">
+<style>
+  .leainputs { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+  .leainputs label { font-size: 12.5px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .leainputs input, .leainputs select {
+    font: 600 15px/1.2 var(--mono); width: 72px; padding: 7px 8px;
+    background: var(--cell-bg); color: var(--text);
+    border: 1px solid var(--panel-edge); border-radius: 6px;
+  }
+  .leainputs select { width: auto; }
+  .leainputs input:focus-visible, .leainputs select:focus-visible { outline: 2px solid var(--vec); outline-offset: 1px; }
+  .leacode { font-family: var(--mono); font-size: 15px; margin-bottom: 12px; }
+  .leacode .fb { color: var(--gpr); } .leacode .fi { color: var(--vec); } .leacode .fd { color: var(--ok); }
+  .regsrow { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+</style>
+
+<div class="wrap">
+  <nav class="topnav">
+    <a href="../">← All lessons</a>
+    <span>Lesson 2 · part 3 of 3</span>
+    <span class="lang"><a href="viz-3-lea.ru.html">RU</a> · <b>EN</b></span>
+  </nav>
+  <div>
+    <h1><code>lea</code> — a calculator in one instruction</h1>
+    <p class="sub">Load Effective Address: the same [base + scale·index + disp] formula, but the result lands in a register — <b>no trip to memory</b>. Brackets present, dereference absent.</p>
+  </div>
+
+  <div class="panel">
+    <div class="label">Play with the operands — <b>lea r0q, [r1q + scale·r2q + disp]</b></div>
+    <div class="leainputs">
+      <label>r1q <input type="number" id="inB" value="7"></label>
+      <label>scale
+        <select id="inS"><option>1</option><option>2</option><option>4</option><option selected>8</option></select>
+      </label>
+      <label>r2q <input type="number" id="inI" value="3"></label>
+      <label>disp <input type="number" id="inD" value="5"></label>
+    </div>
+    <div class="calc live">
+      <span class="op">[</span>
+      <div class="cchip cb"><small>base · r1q</small><span class="cv" id="cB">7</span></div>
+      <span class="op">+</span>
+      <div class="cchip ci"><small id="cSl">8 · r2q</small><span class="cv" id="cI">24</span></div>
+      <span class="op">+</span>
+      <div class="cchip cd"><small>disp</small><span class="cv" id="cD">5</span></div>
+      <span class="op">]</span>
+      <span class="op">→</span>
+      <div class="cchip ct"><small>r0q</small><span class="cv" id="cR">36</span></div>
+    </div>
+    <div class="calcnote">scale — only 1, 2, 4 or 8: a hardware limit, not an assembler one. After lea, r1q and r2q are <b>unchanged</b> and FLAGS is <b>untouched</b>.</div>
+  </div>
+
+  <div class="panel codegrid">
+    <div class="label">The same thing without lea — <b>compare two implementations</b></div>
+    <div class="tabs">
+      <button id="tabChain" class="on">chain of 5 instructions</button>
+      <button id="tabLea">lea — one instruction</button>
+    </div>
+    <div class="regsrow">
+      <div class="gpr" id="g0"><span><span class="rname">r0q</span><br><span class="rrole">result</span></span><span class="rval" id="v0">?</span></div>
+      <div class="gpr" id="g1"><span><span class="rname">r1q</span><br><span class="rrole">base</span></span><span class="rval" id="v1">7</span></div>
+      <div class="gpr" id="g2"><span><span class="rname">r2q</span><br><span class="rrole">index</span></span><span class="rval" id="v2">3</span></div>
+      <div class="gpr" id="g3"><span><span class="rname">r3q</span><br><span class="rrole">scratch</span></span><span class="rval" id="v3">?</span></div>
+    </div>
+    <div class="flags" id="flags"><span>FLAGS:</span><span id="flagtxt">untouched</span></div>
+    <pre class="code" id="code"></pre>
+    <div class="narr" id="narr"></div>
+    <div class="controls">
+      <button class="primary" id="btnStep">Step →</button>
+      <button id="btnBack">← Back</button>
+      <button id="btnReset">Reset</button>
+      <span class="stepno" id="stepno"></span>
+    </div>
+  </div>
+
+  <nav class="pagenav">
+    <a href="viz-2-addressing.en.html">← Part 2 — addressing</a>
+    <a href="../lesson_03/viz-1-offset-trick.en.html">Lesson 3, part 1 — the offset trick →</a>
+  </nav>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+
+  // ── live calculator ───────────────────────────────────────
+  function recalc() {
+    const b = +$('inB').value || 0, s = +$('inS').value, i = +$('inI').value || 0, d = +$('inD').value || 0;
+    $('cB').textContent = b;
+    $('cSl').textContent = s + ' · r2q';
+    $('cI').textContent = `${s}·${i}=${s * i}`;
+    $('cD').textContent = d;
+    $('cR').textContent = b + s * i + d;
+  }
+  ['inB', 'inS', 'inI', 'inD'].forEach(id => $(id).addEventListener('input', recalc));
+  recalc();
+
+  // ── comparison: chain vs lea ───────────────────────────────
+  const VARIANTS = {
+    chain: {
+      code: ['movq r0q, r1q', 'movq r3q, r2q', 'sal  r3q, 3   ; shift left by 3 = ×8', 'add  r3q, 5', 'add  r0q, r3q'],
+      steps: [
+        { l: -1, r0: '?', r3: '?', f: null, on: [],
+          narr: '<b>Task:</b> r0q = r1q + 8·r2q + 5, where r1q=7, r2q=3. Without lea the computation has to be built by hand — and a scratch register r3q gets tied up.' },
+        { l: 0, r0: 7, r3: '?', f: null, on: ['g0'],
+          narr: '<b>movq r0q, r1q</b> — copy base into the future result. r0q = 7.' },
+        { l: 1, r0: 7, r3: 3, f: null, on: ['g3'],
+          narr: '<b>movq r3q, r2q</b> — copy index into the scratch r3q: r2q itself must not be clobbered, it may still be needed.' },
+        { l: 2, r0: 7, r3: 24, f: 'ZF=0 SF=0 — clobbered by sal', on: ['g3'],
+          narr: '<b>sal r3q, 3</b> — shift left by 3 bits = multiply by 8. r3q = 24. The flags are <span class="x">overwritten</span>.' },
+        { l: 3, r0: 7, r3: 29, f: 'ZF=0 SF=0 — clobbered by add', on: ['g3'],
+          narr: '<b>add r3q, 5</b> — added disp. r3q = 29. Flags overwritten again.' },
+        { l: 4, r0: 36, r3: 29, f: 'ZF=0 SF=0 — clobbered by add', on: ['g0'],
+          narr: '<b>add r0q, r3q</b> — done: r0q = 36. Tally: <b>5 instructions</b>, an extra register tied up, FLAGS clobbered — if a cmp had set them earlier, jumping on them is no longer possible.' },
+      ]
+    },
+    lea: {
+      code: ['lea r0q, [r1q + 8*r2q + 5]'],
+      steps: [
+        { l: -1, r0: '?', r3: '?', f: null, on: [],
+          narr: 'Same task: r0q = r1q + 8·r2q + 5. This time — via the address-generation unit.' },
+        { l: 0, r0: 36, r3: '?', f: null, on: ['g0'],
+          narr: '<b>lea r0q, [r1q + 8*r2q + 5]</b> → r0q = 7 + 24 + 5 = <b>36</b>. One instruction. r1q and r2q are unchanged, r3q was never needed, FLAGS is <span class="k">untouched</span> — which is also why you cannot jump on the result of lea. Above all: the brackets here are mere formula syntax, <b>nobody went to memory</b>.' },
+      ]
+    }
+  };
+
+  let variant = 'chain', cur = 0;
+
+  function render() {
+    const v = VARIANTS[variant], st = v.steps[cur];
+    const codeEl = $('code');
+    codeEl.innerHTML = '';
+    v.code.forEach((t, i) => {
+      const s = document.createElement('span');
+      s.className = 'ln' + (i === st.l ? ' hl' : '');
+      s.textContent = t;
+      codeEl.appendChild(s);
+    });
+    $('v0').textContent = st.r0; $('v3').textContent = st.r3;
+    $('v1').textContent = 7; $('v2').textContent = 3;
+    ['g0', 'g1', 'g2', 'g3'].forEach(g => $(g).classList.toggle('active', st.on.includes(g)));
+    if (st.f) { $('flagtxt').textContent = st.f; $('flags').classList.add('touched'); }
+    else { $('flagtxt').textContent = 'untouched'; $('flags').classList.remove('touched'); }
+    $('narr').innerHTML = st.narr;
+    $('stepno').textContent = `step ${cur} / ${v.steps.length - 1}`;
+    $('btnStep').disabled = cur === v.steps.length - 1;
+    $('btnBack').disabled = cur === 0;
+  }
+
+  function setVariant(v) {
+    variant = v; cur = 0;
+    $('tabChain').classList.toggle('on', v === 'chain');
+    $('tabLea').classList.toggle('on', v === 'lea');
+    render();
+  }
+
+  $('tabChain').addEventListener('click', () => setVariant('chain'));
+  $('tabLea').addEventListener('click', () => setVariant('lea'));
+  $('btnStep').addEventListener('click', () => { if (cur < VARIANTS[variant].steps.length - 1) { cur++; render(); } });
+  $('btnBack').addEventListener('click', () => { if (cur > 0) { cur--; render(); } });
+  $('btnReset').addEventListener('click', () => { cur = 0; render(); });
+
+  render();
+})();
+</script>

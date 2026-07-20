@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Урок 3.1 — Трюк со смещением: указатель на конец, счётчик в минусе</title>
+<link rel="stylesheet" href="../assets/viz.css">
+
+<div class="wrap">
+  <nav class="topnav">
+    <a href="../">← Все уроки</a>
+    <span>Урок 3 · часть 1 из 3</span>
+    <span class="lang"><b>RU</b> · <a href="viz-1-offset-trick.en.html">EN</a></span>
+  </nav>
+  <div>
+    <h1>Pointer offset trickery: один регистр — и смещение, и счётчик</h1>
+    <p class="sub">Указатели сдвигаем на конец буфера, width уводим в минус — и цикл крутится, пока widthq не доползёт до нуля. Ни cmp, ни отдельного счётчика.</p>
+  </div>
+
+  <div class="panel codegrid">
+    <pre class="code" id="code"></pre>
+    <div class="narr" id="narr"></div>
+    <div class="controls">
+      <button class="primary" id="btnStep">Шаг →</button>
+      <button id="btnBack">← Назад</button>
+      <button id="btnReset">Сброс</button>
+      <span class="stepno" id="stepno"></span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="label">Куда смотрит загрузка — <b>[srcq + widthq]</b></div>
+    <div class="calc idle" id="calc">
+      <span class="op">[</span>
+      <div class="cchip cb"><small>srcq</small><span class="cv" id="cBase">—</span></div>
+      <span class="op">+</span>
+      <div class="cchip ci"><small>widthq</small><span class="cv" id="cOff">—</span></div>
+      <span class="op">]</span>
+      <span class="op">=</span>
+      <div class="cchip ct"><small>адрес</small><span class="cv" id="cAddr">—</span></div>
+    </div>
+    <div class="calcnote">srcq заранее сдвинут <b>за конец</b> буфера, поэтому отрицательный widthq возвращает адрес внутрь. widthq растёт к нулю — окно едет вправо.</div>
+  </div>
+
+  <div class="panel">
+    <div class="label">Память — <b>буфер src, 32 байта (1000–1031)</b> · src2 = константы 10 (не показан)</div>
+    <div class="memscroll">
+      <div class="memrow" id="mem0"></div>
+      <div class="ptrrow" id="ptr0"></div>
+      <div class="memrow" id="mem1"></div>
+      <div class="ptrrow" id="ptr1"></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="label">CPU — регистры</div>
+    <div class="cpu">
+      <div class="gpr-box">
+        <div class="gpr" id="gsrc"><span><span class="rname">srcq</span><br><span class="rrole">указатель src</span></span><span class="rval" id="vsrc">1000</span></div>
+        <div class="gpr" id="gsrc2"><span><span class="rname">src2q</span><br><span class="rrole">указатель src2</span></span><span class="rval" id="vsrc2">2000</span></div>
+        <div class="gpr" id="gw"><span><span class="rname">widthq</span><br><span class="rrole">смещение и счётчик</span></span><span class="rval" id="vw">32</span></div>
+        <div class="flags" id="flags"><span>FLAGS:</span><span id="flagtxt">—</span><span class="verdict" id="flagverdict"></span></div>
+      </div>
+      <div class="vecs">
+        <div class="vregline vm0" id="vm0"><span class="vn">m0</span><span class="vs" id="vm0s">пусто</span></div>
+        <div class="vregline vm1" id="vm1"><span class="vn">m1</span><span class="vs" id="vm1s">пусто</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel legend">
+    <span><i style="background:var(--vec)"></i>окно чтения [srcq+widthq]</span>
+    <span><i style="background:var(--ok)"></i>записано обратно (+10)</span>
+    <span><i style="background:var(--gpr)"></i>метка окна</span>
+  </div>
+
+  <nav class="pagenav">
+    <a href="../lesson_02/viz-3-lea.ru.html">← Урок 2, часть 3 — LEA</a>
+    <a href="viz-2-unpack.ru.html">Часть 2 — расширение диапазона →</a>
+  </nav>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const BASE = 1000, BASE2 = 2000, W = 32, MM = 16;
+  const INIT = [200, 61, 100, 145, 33, 90, 12, 250, 77, 180, 55, 141, 96, 30, 210, 68,
+                110, 45, 199, 23, 160, 88, 134, 71, 240, 15, 102, 57, 188, 39, 125, 80];
+
+  const CODE = [
+    [';static void add_values(uint8_t *src, const uint8_t *src2, ptrdiff_t width)', 'cm'],
+    ['INIT_XMM sse2', 'kw'],
+    ['cglobal add_values, 3, 3, 2, src, src2, width', 'kw'],
+    ['    add srcq, widthq', ''],
+    ['    add src2q, widthq', ''],
+    ['    neg widthq', ''],
+    ['.loop:', ''],
+    ['    movu  m0, [srcq+widthq]', ''],
+    ['    movu  m1, [src2q+widthq]', ''],
+    ['    paddb m0, m1', ''],
+    ['    movu  [srcq+widthq], m0', ''],
+    ['    add   widthq, mmsize', ''],
+    ['    jl .loop', ''],
+    ['    RET', ''],
+  ];
+
+  function buildSteps() {
+    const S = [];
+    let src = BASE, src2 = BASE2, w = W;
+    let mem = INIT.slice(), written = [];
+    let m0 = null, m1 = null, calc = null, win = null;
+    const snap = (line, extra, narr) => S.push(Object.assign(
+      { line, src, src2, w, m0, m1, calc, win, flags: null,
+        mem: mem.slice(), written: written.slice(), narr }, extra));
+
+    snap(2, {}, `<b>Старт.</b> Аргументы разложены: srcq=1000, src2q=2000, widthq=32. width объявлен как ptrdiff_t — 64-битный, чтобы старшие биты регистра были чистыми и им можно было пользоваться в адресной арифметике.`);
+    src += w;
+    snap(3, { on: 'src' }, `<b>add srcq, widthq</b> → srcq = <b>1032</b>. Указатель теперь смотрит <span class="x">за конец</span> буфера. Звучит опасно, но мы туда не пойдём — читать будем со смещением.`);
+    src2 += w;
+    snap(4, { on: 'src2' }, `<b>add src2q, widthq</b> → src2q = 2032. То же самое со вторым указателем.`);
+    w = -w;
+    snap(5, { on: 'w', flags: { txt: 'SF=1', v: null } }, `<b>neg widthq</b> → widthq = <b>−32</b>. Вот и весь трюк: отрицательное смещение от «конца» указывает в начало буфера. Теперь widthq будет расти к нулю и работать счётчиком.`);
+
+    let it = 0;
+    while (w < 0) {
+      it++;
+      const lo = src + w - BASE;
+      win = [lo, lo + MM - 1];
+      calc = { src, w, addr: src + w };
+      m0 = mem.slice(lo, lo + MM);
+      snap(7, { on: 'src', calcLive: true }, `Итерация ${it}. <b>movu m0, [srcq+widthq]</b> — адрес: 1032 + (${w}) = <span class="t">${src + w}</span>. ${it === 1 ? 'Первая же итерация читает <b>начало</b> буфера — трюк сработал.' : 'Окно уехало на 16 байт вправо — widthq сам его сдвинул.'}`);
+      m1 = Array(16).fill(10);
+      snap(8, { on: 'src2' }, `<b>movu m1, [src2q+widthq]</b> — то же смещение работает для второго буфера: 2032 + (${w}) = ${src2 + w}. Одно значение widthq обслуживает обе загрузки (и сколько угодно ещё).`);
+      m0 = m0.map(x => (x + 10) & 255);
+      snap(9, {}, `<b>paddb m0, m1</b> — знакомое по уроку 1 сложение: 16 байт разом.`);
+      for (let i = 0; i < MM; i++) { mem[lo + i] = m0[i]; written.push(lo + i); }
+      snap(10, { on: 'src' }, `<b>movu [srcq+widthq], m0</b> — результат записан по тому же адресу ${src + w}. Зелёное = обработано.`);
+      const oldW = w;
+      w += MM;
+      snap(11, { on: 'w', flags: { txt: w < 0 ? 'SF=1' : 'ZF=1 SF=0', v: null } }, `<b>add widthq, mmsize</b>: ${oldW} + 16 = <b>${w}</b>. Счётчик ползёт к нулю, флаги выставлены — cmp не нужен.`);
+      const taken = w < 0;
+      snap(12, { flags: { txt: w < 0 ? 'SF=1' : 'ZF=1 SF=0', v: taken } }, taken
+        ? `<b>jl .loop</b> — widthq всё ещё меньше нуля → <span class="k">прыжок</span>: остались необработанные байты.`
+        : `<b>jl .loop</b> — widthq = 0, отрицательность кончилась → <span class="x">выход</span>. Заметь красоту: ноль означает одновременно «счётчик исчерпан» и «смещение дошло до конца буфера».`);
+    }
+    win = null; calc = null;
+    snap(13, {}, `<b>RET.</b> Один регистр widthq отработал три роли: счётчик цикла, смещение для src и смещение для src2. Сэкономлены cmp и отдельный инкремент указателей — в горячем цикле это заметно.`);
+    return S;
+  }
+
+  const STEPS = buildSteps();
+  const codeEl = $('code');
+  CODE.forEach(([t, c], i) => {
+    const s = document.createElement('span');
+    s.className = 'ln' + (c ? ' ' + c : '');
+    s.id = 'ln' + i;
+    s.textContent = t || ' ';
+    codeEl.appendChild(s);
+  });
+
+  function row(rowEl, ptrEl, st, ri) {
+    rowEl.innerHTML = ''; ptrEl.innerHTML = '';
+    const a = document.createElement('span');
+    a.className = 'addr'; a.textContent = (BASE + ri * 16) + ':';
+    rowEl.appendChild(a);
+    for (let i = 0; i < 16; i++) {
+      const gi = ri * 16 + i;
+      const c = document.createElement('span');
+      c.className = 'cell';
+      if (st.written.includes(gi)) c.className += ' written';
+      if (st.win && gi >= st.win[0] && gi <= st.win[1]) c.className += ' reading';
+      c.textContent = st.mem[gi];
+      rowEl.appendChild(c);
+    }
+    if (st.win && st.win[0] >= ri * 16 && st.win[0] < ri * 16 + 16) {
+      const p = document.createElement('span');
+      p.className = 'ptr';
+      p.style.gridColumn = (2 + (st.win[0] - ri * 16)) + ' / span 6';
+      p.style.justifySelf = 'start';
+      p.textContent = '▲ srcq+widthq = ' + (BASE + st.win[0]);
+      ptrEl.appendChild(p);
+    }
+  }
+
+  let cur = 0;
+  function render() {
+    const st = STEPS[cur];
+    CODE.forEach((_, i) => $('ln' + i).classList.toggle('hl', st.line === i));
+    row($('mem0'), $('ptr0'), st, 0);
+    row($('mem1'), $('ptr1'), st, 1);
+    $('vsrc').textContent = st.src; $('vsrc2').textContent = st.src2; $('vw').textContent = st.w;
+    $('gsrc').classList.toggle('active', st.on === 'src');
+    $('gsrc2').classList.toggle('active', st.on === 'src2');
+    $('gw').classList.toggle('active', st.on === 'w');
+    $('vm0s').textContent = st.m0 ? '[' + st.m0.join(', ') + ']' : 'пусто';
+    $('vm1s').textContent = st.m1 ? '[10 ×16]' : 'пусто';
+    $('vm0').classList.toggle('loaded', !!st.m0);
+    $('vm1').classList.toggle('loaded', !!st.m1);
+    $('calc').classList.toggle('idle', !st.calc);
+    $('calc').classList.toggle('live', !!st.calcLive);
+    $('cBase').textContent = st.calc ? st.calc.src : '—';
+    $('cOff').textContent = st.calc ? st.calc.w : '—';
+    $('cAddr').textContent = st.calc ? st.calc.addr : '—';
+    if (st.flags) {
+      $('flagtxt').textContent = st.flags.txt;
+      $('flags').classList.add('touched');
+      const v = $('flagverdict');
+      if (st.flags.v !== null) {
+        v.textContent = st.flags.v ? 'прыжок ✓' : 'выход ✕';
+        v.className = 'verdict ' + (st.flags.v ? 'yes' : 'no');
+      } else v.textContent = '';
+    } else {
+      $('flagtxt').textContent = '—';
+      $('flags').classList.remove('touched');
+      $('flagverdict').textContent = '';
+    }
+    $('narr').innerHTML = st.narr;
+    $('stepno').textContent = `шаг ${cur} / ${STEPS.length - 1}`;
+    $('btnStep').disabled = cur === STEPS.length - 1;
+    $('btnBack').disabled = cur === 0;
+  }
+
+  $('btnStep').addEventListener('click', () => { if (cur < STEPS.length - 1) { cur++; render(); } });
+  $('btnBack').addEventListener('click', () => { if (cur > 0) { cur--; render(); } });
+  $('btnReset').addEventListener('click', () => { cur = 0; render(); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); if (cur < STEPS.length - 1) { cur++; render(); } }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); if (cur > 0) { cur--; render(); } }
+  });
+
+  render();
+})();
+</script>

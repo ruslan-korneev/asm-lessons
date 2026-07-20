@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Урок 3.2 — Расширение диапазона: punpcklbw / punpckhbw</title>
+<link rel="stylesheet" href="../assets/viz.css">
+
+<div class="wrap">
+  <nav class="topnav">
+    <a href="../">← Все уроки</a>
+    <span>Урок 3 · часть 2 из 3</span>
+    <span class="lang"><b>RU</b> · <a href="viz-2-unpack.en.html">EN</a></span>
+  </nav>
+  <div>
+    <h1>Расширение диапазона: байты → слова без переполнения</h1>
+    <p class="sub">200 + 100 в байте — это уже переполнение. Решение: перед арифметикой «распаковать» байты в 16-битные слова. Интерлив с нулями — zero extension, интерлив с маской знака — sign extension.</p>
+  </div>
+
+  <div class="panel codegrid">
+    <div class="tabs">
+      <button id="tabU" class="on">беззнаковое — zero extension</button>
+      <button id="tabS">знаковое — sign extension</button>
+    </div>
+    <div>
+      <div class="vreg" id="rm0">
+        <div class="vname">m0 <span id="lm0">— исходные 16 байт</span></div>
+        <div class="vcells-scroll"><div class="vcells" id="cm0"></div></div>
+      </div>
+      <div class="vreg" style="margin-top:10px" id="rm1">
+        <div class="vname">m1 <span id="lm1">— копия</span></div>
+        <div class="vcells-scroll"><div class="vcells" id="cm1"></div></div>
+      </div>
+      <div class="vreg" style="margin-top:10px" id="rm2">
+        <div class="vname">m2 <span id="lm2">— второй операнд интерлива</span></div>
+        <div class="vcells-scroll"><div class="vcells" id="cm2"></div></div>
+      </div>
+    </div>
+    <pre class="code" id="code"></pre>
+    <div class="narr" id="narr"></div>
+    <div class="controls">
+      <button class="primary" id="btnStep">Шаг →</button>
+      <button id="btnBack">← Назад</button>
+      <button id="btnReset">Сброс</button>
+      <span class="stepno" id="stepno"></span>
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--vec)"></i>младшая половина (low) → punpck<b>l</b>bw</span>
+      <span><i style="background:var(--tgt)"></i>старшая половина (high) → punpck<b>h</b>bw</span>
+      <span><i style="background:var(--bad)"></i>отрицательный байт / маска 0xFF</span>
+    </div>
+  </div>
+
+  <nav class="pagenav">
+    <a href="viz-1-offset-trick.ru.html">← Часть 1 — трюк со смещением</a>
+    <a href="viz-3-pshufb.ru.html">Часть 3 — pshufb →</a>
+  </nav>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const BYTES_U = [200, 30, 255, 7, 64, 129, 3, 250, 17, 88, 140, 66, 201, 5, 90, 180];
+  const BYTES_S = [-2, 5, -120, 100, 7, -1, 33, -64, 90, -13, 0, 127, -128, 45, -7, 12];
+
+  const VARIANTS = {
+    U: {
+      bytes: BYTES_U,
+      code: ['pxor      m2, m2 ; обнулить m2',
+             '',
+             'movu      m0, [srcq]',
+             'movu      m1, m0 ; копия m0 в m1',
+             'punpcklbw m0, m2',
+             'punpckhbw m1, m2'],
+      steps: [
+        { l: -1, m0: null, m1: null, m2: null,
+          narr: '<b>Задача.</b> В памяти 16 беззнаковых байт, среди них 200 и 250. Прибавить к ним что-то крупное — переполнение: байт не вмещает больше 255. Расширим каждый байт до слова (16 бит).' },
+        { l: 0, m0: null, m1: null, m2: 'z',
+          narr: '<b>pxor m2, m2</b> — знакомая идиома обнуления, теперь векторная: m2 = 16 нулевых байт. Эти нули станут старшими половинками будущих слов.' },
+        { l: 2, m0: 'b', m1: null, m2: 'z',
+          narr: '<b>movu m0, [srcq]</b> — 16 исходных байт в m0. Половины подсвечены: <span class="v">младшая</span> и <span class="t">старшая</span> — их судьбы разойдутся.' },
+        { l: 3, m0: 'b', m1: 'b', m2: 'z',
+          narr: '<b>movu m1, m0</b> — копия. Зачем: punpck перезаписывает свой первый операнд, а нам нужны обе половины. В следующем уроке трёхоперандный AVX сделает эту копию ненужной.' },
+        { l: 4, m0: 'wl', m1: 'b', m2: 'z',
+          narr: '<b>punpcklbw m0, m2</b> — «unpack low bytes to words»: младшие 8 байт m0 перемежаются с младшими 8 байтами m2 (нулями): байт, ноль, байт, ноль… Каждая пара «байт+00» = готовое 16-битное слово с тем же значением. Это и есть <b>zero extension</b>.' },
+        { l: 5, m0: 'wl', m1: 'wh', m2: 'z',
+          narr: '<b>punpckhbw m1, m2</b> — то же для <span class="t">старших</span> 8 байт (из копии). Итог: было 16 байт в одном регистре — стало 16 слов в двух. Теперь любая арифметика без переполнения, а обратно в байты вернёт packuswb (со «сжатием» больших значений до 255).' },
+      ]
+    },
+    S: {
+      bytes: BYTES_S,
+      code: ['pxor      m2, m2 ; обнулить m2',
+             '',
+             'movu      m0, [srcq]',
+             'movu      m1, m0 ; копия m0 в m1',
+             '',
+             'pcmpgtb   m2, m0',
+             'punpcklbw m0, m2',
+             'punpckhbw m1, m2'],
+      steps: [
+        { l: -1, m0: null, m1: null, m2: null,
+          narr: '<b>Задача посложнее:</b> байты знаковые, среди них −2 и −128. Дополнить их нулями нельзя: −2 = 0b11111110, а слово 0x00FE — это +254, знак потерян. Нужно <b>sign extension</b>: тиражировать знаковый бит.' },
+        { l: 0, m0: null, m1: null, m2: 'z',
+          narr: '<b>pxor m2, m2</b> — начинаем так же, m2 = нули.' },
+        { l: 2, m0: 'b', m1: null, m2: 'z',
+          narr: '<b>movu m0, [srcq]</b> — 16 знаковых байт. <span class="x">Красные</span> — отрицательные: у них старший бит = 1.' },
+        { l: 3, m0: 'b', m1: 'b', m2: 'z',
+          narr: '<b>movu m1, m0</b> — копия, как и раньше.' },
+        { l: 5, m0: 'b', m1: 'b', m2: 'm',
+          narr: '<b>pcmpgtb m2, m0</b> — «packed compare greater than byte»: для каждого байта считает «0 &gt; байт?». Да → все биты единицы (−1, т.е. 0xFF), нет → нули. Получилась <b>маска знака</b>: 0xFF напротив каждого отрицательного байта.' },
+        { l: 6, m0: 'wl', m1: 'b', m2: 'm',
+          narr: '<b>punpcklbw m0, m2</b> — тот же интерлив, но вторым операндом идёт маска: отрицательный байт получает старшую половинку 0xFF → слово 0xFFFE = −2. Знак сохранён. Положительный байт получает 0x00, как раньше.' },
+        { l: 7, m0: 'wl', m1: 'wh', m2: 'm',
+          narr: '<b>punpckhbw m1, m2</b> — старшая половина. Итог тот же — 16 слов в двух регистрах, — но ценой одной лишней инструкции (pcmpgtb) по сравнению с беззнаковым случаем.' },
+      ]
+    }
+  };
+
+  let variant = 'U', cur = 0;
+
+  function cells(el, mode, bytes, signed) {
+    el.classList.remove('w8');
+    el.innerHTML = '';
+    if (mode === null) {
+      for (let i = 0; i < 16; i++) el.appendChild(vc('·', ''));
+    } else if (mode === 'z') {
+      for (let i = 0; i < 16; i++) el.appendChild(vc('0', 'zero'));
+    } else if (mode === 'm') {
+      for (let i = 0; i < 16; i++) el.appendChild(vc(bytes[i] < 0 ? '-1' : '0', bytes[i] < 0 ? 'neg' : 'zero'));
+    } else if (mode === 'b') {
+      for (let i = 0; i < 16; i++) {
+        let cls = i < 8 ? 'lo' : 'hi';
+        if (signed && bytes[i] < 0) cls = 'neg';
+        el.appendChild(vc(bytes[i], cls));
+      }
+    } else if (mode === 'wl' || mode === 'wh') {
+      el.classList.add('w8');
+      const off = mode === 'wl' ? 0 : 8;
+      for (let i = 0; i < 8; i++) {
+        const v = bytes[off + i];
+        let cls = mode === 'wl' ? 'lo' : 'hi';
+        if (signed && v < 0) cls = 'neg';
+        el.appendChild(vc(v, cls));
+      }
+    }
+  }
+  function vc(txt, cls) {
+    const c = document.createElement('span');
+    c.className = 'vcell' + (cls ? ' ' + cls : '');
+    c.textContent = txt;
+    return c;
+  }
+
+  function render() {
+    const v = VARIANTS[variant], st = v.steps[cur], signed = variant === 'S';
+    const codeEl = $('code');
+    codeEl.innerHTML = '';
+    v.code.forEach((t, i) => {
+      const s = document.createElement('span');
+      s.className = 'ln' + (i === st.l ? ' hl' : '');
+      s.textContent = t || ' ';
+      codeEl.appendChild(s);
+    });
+    cells($('cm0'), st.m0, v.bytes, signed);
+    cells($('cm1'), st.m1, v.bytes, signed);
+    cells($('cm2'), st.m2, v.bytes, signed);
+    $('lm0').textContent = st.m0 === 'wl' ? '— младшие 8 байт, теперь слова' : '— исходные 16 байт';
+    $('lm1').textContent = st.m1 === 'wh' ? '— старшие 8 байт, теперь слова' : '— копия';
+    $('lm2').textContent = st.m2 === 'm' ? '— маска знака из pcmpgtb' : '— второй операнд интерлива';
+    $('narr').innerHTML = st.narr;
+    $('stepno').textContent = `шаг ${cur} / ${v.steps.length - 1}`;
+    $('btnStep').disabled = cur === v.steps.length - 1;
+    $('btnBack').disabled = cur === 0;
+  }
+
+  function setVariant(v) {
+    variant = v; cur = 0;
+    $('tabU').classList.toggle('on', v === 'U');
+    $('tabS').classList.toggle('on', v === 'S');
+    render();
+  }
+
+  $('tabU').addEventListener('click', () => setVariant('U'));
+  $('tabS').addEventListener('click', () => setVariant('S'));
+  $('btnStep').addEventListener('click', () => { if (cur < VARIANTS[variant].steps.length - 1) { cur++; render(); } });
+  $('btnBack').addEventListener('click', () => { if (cur > 0) { cur--; render(); } });
+  $('btnReset').addEventListener('click', () => { cur = 0; render(); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); const n = VARIANTS[variant].steps.length; if (cur < n - 1) { cur++; render(); } }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); if (cur > 0) { cur--; render(); } }
+  });
+
+  render();
+})();
+</script>

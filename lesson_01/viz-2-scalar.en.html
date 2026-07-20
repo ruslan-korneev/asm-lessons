@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 1.2 — Scalar asm: one instruction, one value</title>
+<link rel="stylesheet" href="../assets/viz.css">
+
+<div class="wrap">
+  <nav class="topnav">
+    <a href="../">← All lessons</a>
+    <span>Lesson 1 · part 2 of 3</span>
+    <span class="lang"><a href="viz-2-scalar.ru.html">RU</a> · <b>EN</b></span>
+  </nav>
+  <div>
+    <h1>Scalar asm: one instruction, one value</h1>
+    <p class="sub">That "artificial" snippet from the lesson. One GPR, no vectors. Watch the value change.</p>
+  </div>
+
+  <div class="panel">
+    <div class="scalar">
+      <div>
+        <div class="biggpr">
+          <div class="rname">r0q</div>
+          <div class="rval" id="s_rval">?</div>
+        </div>
+        <div class="hint">Intel order: read <code>mov r0q, 3</code> as "r0q = 3".<br>Destination on the left ← source on the right, like memcpy(dst, src).</div>
+      </div>
+      <div>
+        <pre class="code" id="s_code"></pre>
+        <div class="narr" id="s_narr" style="margin-top:12px"></div>
+        <div class="controls" style="margin-top:12px">
+          <button class="primary" id="s_step">Step →</button>
+          <button id="s_back">← Back</button>
+          <button id="s_reset">Reset</button>
+          <span class="stepno" id="s_stepno"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <nav class="pagenav">
+    <a href="viz-1-brighten.en.html">← Part 1 — the brighten loop</a>
+    <a href="viz-3-add-values.en.html">Part 3 — add_values →</a>
+  </nav>
+</div>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var LINES = ["mov  r0q, 3", "inc  r0q", "dec  r0q", "imul r0q, 5"];
+  var STEPS = [
+    { line: -1, val: "?", desc: "<b>Start.</b> r0q holds garbage (whatever was left from earlier work). A register is never \"empty\" — it always holds some bits." },
+    { line: 0, val: "3", desc: "<b>mov.</b> The 3 is an <b>immediate</b> value: baked right into the instruction encoding, nothing read from memory. r0q = 3. The \"q\" suffix = treat the register as a qword (64 bits)." },
+    { line: 1, val: "4", desc: "<b>inc</b> = increment: r0q += 1 → 4. A single operand — it's both source and destination." },
+    { line: 2, val: "3", desc: "<b>dec</b> = decrement: r0q −= 1 → back to 3." },
+    { line: 3, val: "15", desc: "<b>imul</b> = integer multiply: r0q ×= 5 → <b>15</b>. Bottom line: four instructions, every operation stayed inside one register, memory untouched. That's scalar code: one value at a time." }
+  ];
+  var code = $("s_code");
+  LINES.forEach(function (t, i) {
+    var s = document.createElement("span");
+    s.className = "ln"; s.id = "s_ln" + i; s.textContent = t;
+    code.appendChild(s);
+  });
+  var cur = 0;
+  function render() {
+    var st = STEPS[cur];
+    var rv = $("s_rval");
+    rv.textContent = st.val;
+    rv.className = "rval" + (cur > 0 ? " flash" : "");
+    setTimeout(function () { rv.className = "rval"; }, 300);
+    for (var i = 0; i < LINES.length; i++)
+      $("s_ln" + i).className = "ln" + (st.line === i ? " hl" : "");
+    $("s_narr").innerHTML = st.desc;
+    $("s_stepno").textContent = "step " + cur + " / " + (STEPS.length - 1);
+    $("s_step").disabled = cur === STEPS.length - 1;
+    $("s_back").disabled = cur === 0;
+  }
+  $("s_step").addEventListener("click", function () { if (cur < STEPS.length - 1) { cur++; render(); } });
+  $("s_back").addEventListener("click", function () { if (cur > 0) { cur--; render(); } });
+  $("s_reset").addEventListener("click", function () { cur = 0; render(); });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "ArrowRight" || e.key === " ") { e.preventDefault(); if (cur < STEPS.length - 1) { cur++; render(); } }
+    if (e.key === "ArrowLeft") { e.preventDefault(); if (cur > 0) { cur--; render(); } }
+  });
+  render();
+})();
+</script>
