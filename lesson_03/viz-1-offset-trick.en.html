@@ -42,12 +42,22 @@
   </div>
 
   <div class="panel">
-    <div class="label">Memory — <b>src buffer, 32 bytes (1000–1031)</b> · src2 = constants 10 (not shown)</div>
+    <div class="label">Memory — <b>src buffer (1000–1031)</b> · results are written back here</div>
     <div class="memscroll">
       <div class="memrow" id="mem0"></div>
       <div class="ptrrow" id="ptr0"></div>
       <div class="memrow" id="mem1"></div>
       <div class="ptrrow" id="ptr1"></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="label">Memory — <b>src2 buffer (2000–2031)</b> · second addends, read-only</div>
+    <div class="memscroll">
+      <div class="memrow" id="mem2"></div>
+      <div class="ptrrow" id="ptr2"></div>
+      <div class="memrow" id="mem3"></div>
+      <div class="ptrrow" id="ptr3"></div>
     </div>
   </div>
 
@@ -107,9 +117,9 @@
     const S = [];
     let src = BASE, src2 = BASE2, w = W;
     let mem = INIT.slice(), written = [];
-    let m0 = null, m1 = null, calc = null, win = null;
+    let m0 = null, m1 = null, calc = null, win = null, win2 = null;
     const snap = (line, extra, narr) => S.push(Object.assign(
-      { line, src, src2, w, m0, m1, calc, win, flags: null,
+      { line, src, src2, w, m0, m1, calc, win, win2, flags: null,
         mem: mem.slice(), written: written.slice(), narr }, extra));
 
     snap(2, {}, `<b>Start.</b> The arguments are laid out: srcq=1000, src2q=2000, widthq=32. width is declared as ptrdiff_t — 64-bit, so the upper bits of the register are clean and it can be used in address arithmetic.`);
@@ -129,6 +139,7 @@
       m0 = mem.slice(lo, lo + MM);
       snap(7, { on: 'src', calcLive: true }, `Iteration ${it}. <b>movu m0, [srcq+widthq]</b> — address: 1032 + (${w}) = <span class="t">${src + w}</span>. ${it === 1 ? 'The very first iteration reads the <b>start</b> of the buffer — the trick worked.' : 'The window moved 16 bytes to the right — widthq shifted it on its own.'}`);
       m1 = Array(16).fill(10);
+      win2 = [lo, lo + MM - 1];
       snap(8, { on: 'src2' }, `<b>movu m1, [src2q+widthq]</b> — the same offset works for the second buffer: 2032 + (${w}) = ${src2 + w}. One widthq value serves both loads (and as many more as you like).`);
       m0 = m0.map(x => (x + 10) & 255);
       snap(9, {}, `<b>paddb m0, m1</b> — the addition you know from lesson 1: 16 bytes at once.`);
@@ -142,7 +153,7 @@
         ? `<b>jl .loop</b> — widthq is still below zero → <span class="k">jump</span>: unprocessed bytes remain.`
         : `<b>jl .loop</b> — widthq = 0, no longer negative → <span class="x">exit</span>. Note the elegance: zero means both "counter exhausted" and "offset reached the end of the buffer".`);
     }
-    win = null; calc = null;
+    win = null; win2 = null; calc = null;
     snap(13, {}, `<b>RET.</b> One register, widthq, played three roles: loop counter, offset for src and offset for src2. We saved a cmp and separate pointer increments — noticeable in a hot loop.`);
     return S;
   }
@@ -157,26 +168,27 @@
     codeEl.appendChild(s);
   });
 
-  function row(rowEl, ptrEl, st, ri) {
+  const TENS = Array(32).fill(10);
+  function row(rowEl, ptrEl, ri, base, vals, win, written, label) {
     rowEl.innerHTML = ''; ptrEl.innerHTML = '';
     const a = document.createElement('span');
-    a.className = 'addr'; a.textContent = (BASE + ri * 16) + ':';
+    a.className = 'addr'; a.textContent = (base + ri * 16) + ':';
     rowEl.appendChild(a);
     for (let i = 0; i < 16; i++) {
       const gi = ri * 16 + i;
       const c = document.createElement('span');
       c.className = 'cell';
-      if (st.written.includes(gi)) c.className += ' written';
-      if (st.win && gi >= st.win[0] && gi <= st.win[1]) c.className += ' reading';
-      c.textContent = st.mem[gi];
+      if (written && written.includes(gi)) c.className += ' written';
+      if (win && gi >= win[0] && gi <= win[1]) c.className += ' reading';
+      c.textContent = vals[gi];
       rowEl.appendChild(c);
     }
-    if (st.win && st.win[0] >= ri * 16 && st.win[0] < ri * 16 + 16) {
+    if (win && win[0] >= ri * 16 && win[0] < ri * 16 + 16) {
       const p = document.createElement('span');
       p.className = 'ptr';
-      p.style.gridColumn = (2 + (st.win[0] - ri * 16)) + ' / span 6';
+      p.style.gridColumn = (2 + (win[0] - ri * 16)) + ' / span 6';
       p.style.justifySelf = 'start';
-      p.textContent = '▲ srcq+widthq = ' + (BASE + st.win[0]);
+      p.textContent = '▲ ' + label + ' = ' + (base + win[0]);
       ptrEl.appendChild(p);
     }
   }
@@ -185,8 +197,10 @@
   function render() {
     const st = STEPS[cur];
     CODE.forEach((_, i) => $('ln' + i).classList.toggle('hl', st.line === i));
-    row($('mem0'), $('ptr0'), st, 0);
-    row($('mem1'), $('ptr1'), st, 1);
+    row($('mem0'), $('ptr0'), 0, BASE, st.mem, st.win, st.written, 'srcq+widthq');
+    row($('mem1'), $('ptr1'), 1, BASE, st.mem, st.win, st.written, 'srcq+widthq');
+    row($('mem2'), $('ptr2'), 0, BASE2, TENS, st.win2, null, 'src2q+widthq');
+    row($('mem3'), $('ptr3'), 1, BASE2, TENS, st.win2, null, 'src2q+widthq');
     $('vsrc').textContent = st.src; $('vsrc2').textContent = st.src2; $('vw').textContent = st.w;
     $('gsrc').classList.toggle('active', st.on === 'src');
     $('gsrc2').classList.toggle('active', st.on === 'src2');
