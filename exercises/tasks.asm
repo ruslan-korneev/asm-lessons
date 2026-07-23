@@ -55,13 +55,13 @@ cglobal invert, 2, 2, 2, src, width
 ; (packed add unsigned saturate) — и построй цикл вокруг неё.
 ; Константу [40 ×16] объяви в SECTION_RODATA: times 16 db 40
 ;-----------------------------------------------------------------------------
-SECTION_RODATA
+SECTION_RODATA 32
 
-saturation_numbers: times 16 db 40
+saturation_numbers: times 32 db 40
 
 SECTION .text
 
-INIT_XMM sse2
+%macro BRIGHTEN_SAT 0
 cglobal brighten_sat, 2, 2, 2, src, width
     ; I guess here is the required instruction (one of them):
     ;  [this signed integers](https://www.felixcloutier.com/x86/paddsb:paddsw)
@@ -77,6 +77,13 @@ cglobal brighten_sat, 2, 2, 2, src, width
     add widthq, mmsize
     jl .loop
     RET
+%endmacro
+
+INIT_XMM sse2
+BRIGHTEN_SAT
+
+INIT_YMM avx2
+BRIGHTEN_SAT
 
 ;-----------------------------------------------------------------------------
 ; ЗАДАЧА 3: RGBA → BGRA (обмен каналов R и B)
