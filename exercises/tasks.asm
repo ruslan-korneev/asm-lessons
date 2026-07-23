@@ -40,11 +40,27 @@ cglobal add_values, 3, 3, 2, src, src2, width
 ; через psubb из регистра с 255 — как больше нравится.
 ; Каркас цикла — как в задаче 0, но буфер один.
 ;-----------------------------------------------------------------------------
+SECTION_RODATA
+
+inversion_number: times 16 db 0xFF
+
+SECTION .text
+
 INIT_XMM sse2
 cglobal invert, 2, 2, 2, src, width
     ; TODO: подготовка (сдвиг указателя, neg)
+    add srcq, widthq            ; add width to src, e.g. 1000+32
+    mova m1, [inversion_number] ; load constant
+    neg widthq                  ; negative width
+
     ; TODO: цикл — load, инверсия, store, add/jl
-    RET
+.loop:
+    movu m0, [srcq+widthq]       ; load
+    pxor m0, m1                  ; inversion
+    movu [srcq+widthq], m0       ; store
+    add  widthq, mmsize          ; add (e.g. -32+16=-16, -16+16=0)
+    jl .loop                     ; jump to next iteration if widthq < 0
+    RET                          ; finish
 
 ;-----------------------------------------------------------------------------
 ; ЗАДАЧА 2: яркость с насыщением
