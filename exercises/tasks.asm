@@ -67,7 +67,7 @@ cglobal brighten_sat, 2, 2, 2, src, width
     ;  [this signed integers](https://www.felixcloutier.com/x86/paddsb:paddsw)
     ;  [or this unsigned one](https://www.felixcloutier.com/x86/paddusb:paddusw)
     add srcq, widthq
-    movu m1, [saturation_numbers]
+    mova m1, [saturation_numbers]
     neg widthq
 
 .loop:
