@@ -17,11 +17,11 @@
 void ex_add_values_sse2(uint8_t *src, const uint8_t *src2, ptrdiff_t width);
 void ex_invert_sse2(uint8_t *src, ptrdiff_t width);
 void ex_brighten_sat_sse2(uint8_t *src, ptrdiff_t width);
-void ex_rgba_to_bgra_sse2(uint8_t *src, ptrdiff_t width);
+void ex_rgba_to_bgra_ssse3(uint8_t *src, ptrdiff_t width);
 #define add_values   ex_add_values_sse2
 #define invert       ex_invert_sse2
 #define brighten_sat ex_brighten_sat_sse2
-#define rgba_to_bgra ex_rgba_to_bgra_sse2
+#define rgba_to_bgra ex_rgba_to_bgra_ssse3
 
 /* ── эталоны на C ── */
 static void ref_add_values(uint8_t *a, const uint8_t *b, ptrdiff_t w) {

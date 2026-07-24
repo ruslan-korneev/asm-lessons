@@ -3,13 +3,6 @@
 
 %include "x86inc.asm"
 
-SECTION_RODATA
-
-; TODO(задача 3): маска для pshufb — перестановка RGBA → BGRA.
-; Каждый выходной байт = индекс входного байта. Пиксель 0 занимает байты 0..3 (R,G,B,A).
-; Сейчас маска тождественная — замени индексы.
-bgra_shuffle: db 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
-
 SECTION .text
 
 ;-----------------------------------------------------------------------------
@@ -110,7 +103,22 @@ BRIGHTEN_SAT
 ; (индексы: для каждого выходного байта — откуда взять входной) и напиши цикл.
 ; Внимание: pshufb — это SSSE3, не SSE2. Что поменять в INIT-строке/cglobal?
 ;-----------------------------------------------------------------------------
-INIT_XMM sse2
+
+SECTION_RODATA
+
+bgra_shuffle: db 2, 1, 0, 3, 6, 5, 4, 7, 10, 9, 8, 11, 14, 13, 12, 15
+
+SECTION .text
+
+INIT_XMM ssse3
 cglobal rgba_to_bgra, 2, 2, 2, src, width
-    ; TODO
+    add srcq, widthq
+    mova m1, [bgra_shuffle]
+    neg widthq
+.loop:
+    movu m0, [srcq+widthq]
+    pshufb m0, m1
+    movu [srcq+widthq], m0
+    add widthq, mmsize
+    jl .loop
     RET
